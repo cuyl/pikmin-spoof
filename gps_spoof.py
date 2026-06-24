@@ -1029,16 +1029,36 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def _free_port(port):
+    """Kill any previous instance holding `port`. Cross-platform (macOS/Linux/Windows)."""
     import subprocess
-    result = subprocess.run(['lsof', '-ti', f':{port}'], capture_output=True, text=True)
-    pids = result.stdout.strip().split()
-    if pids:
-        print(f'  Stopping previous instance (PID {", ".join(pids)})...')
-        for pid in pids:
-            try:
+
+    pids = []
+    try:
+        if sys.platform == 'win32':
+            # netstat lists "...:port ... LISTENING  <pid>" as the last column.
+            out = subprocess.run(['netstat', '-ano', '-p', 'TCP'],
+                                 capture_output=True, text=True).stdout
+            for line in out.splitlines():
+                parts = line.split()
+                if len(parts) >= 5 and parts[1].endswith(f':{port}') and parts[3] == 'LISTENING':
+                    pids.append(parts[4])
+        else:
+            out = subprocess.run(['lsof', '-ti', f':{port}'],
+                                 capture_output=True, text=True).stdout
+            pids = out.strip().split()
+    except FileNotFoundError:
+        # No lsof/netstat available; skip the convenience cleanup.
+        return
+
+    for pid in set(pids):
+        print(f'  Stopping previous instance (PID {pid})...')
+        try:
+            if sys.platform == 'win32':
+                subprocess.run(['taskkill', '/PID', pid, '/F'], capture_output=True)
+            else:
                 os.kill(int(pid), signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+        except (ProcessLookupError, ValueError):
+            pass
 
 
 # ── Entry Point ────────────────────────────────────────────────────────────────
