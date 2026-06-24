@@ -4,6 +4,8 @@
 
 > **📌 使用方式：** 用 USB 線把 iPhone 接到 Mac，在 Mac 上執行這個工具，即可從 Mac 的瀏覽器控制 iPhone 的 GPS 位置。**Android 手機不適用。**
 
+> 🪟 **使用 Windows 電腦的人請改看 [README-Windows.md](README-Windows.md)。** 這份文件是給 Mac 使用者的。
+
 ---
 
 ## 在開始之前，先看這裡 👀
