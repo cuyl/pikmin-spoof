@@ -136,10 +136,16 @@ Windows 本身不認得 iPhone，需要 Apple 的驅動程式才能透過 USB �
 3. 終端機會開始顯示一堆文字在跑，**這是正常的**，耐心等待
 4. 等到你看到 `Successfully installed ...` 這樣的文字出現 → ✅ 安裝成功
 
+> **怎麼確認成功？** 成功的標誌是一行很長的 `Successfully installed ...`，後面接著一大串套件名稱（裡面會有 `pymobiledevice3`）。這行很長、容易看漏，要往上捲一點找。
+>
+> 最後出現的 `[notice] A new release of pip is available`（pip 有新版）**不是錯誤**，可以直接忽略。
+
 > **遇到錯誤 `pip 不是內部或外部命令`？** 改用：
 > ```
 > python -m pip install pymobiledevice3
 > ```
+
+> ⚠️ **遇到 `Microsoft Visual C++ 14.0 or greater is required`？** 你的 Python 版本太新了（例如 3.14），請看下方常見問題的 **問題七**，換裝 Python 3.12 即可解決，不用裝任何編譯器。
 
 ---
 
@@ -366,7 +372,29 @@ for /f "tokens=5" %a in ('netstat -ano ^| findstr :8765') do taskkill /PID %a /F
 </details>
 
 <details>
-<summary>❓ 問題七：搖桿或地圖點了，但 iPhone 定位沒動</summary>
+<summary>❓ 問題七：安裝套件時出現 <code>Microsoft Visual C++ 14.0 or greater is required</code></summary>
+
+通常出現在 **步驟 C**，紅字還會寫 `Failed building wheel for lzfse`（或 `pylzss`）、`Failed to build pylzss lzfse`。
+
+**原因：** 你裝的 Python 版本太新（例如剛出的 3.14）。`lzfse`、`pylzss` 這兩個套件還沒為太新的版本準備「現成安裝檔」，電腦只好自己編譯，而編譯需要微軟的 C++ 工具，沒裝就報這個錯。
+
+**最簡單的解法是換裝穩定的 Python 3.12（不需要裝任何編譯器）：**
+
+1. 移除現在的 Python：Windows **設定 → 應用程式** → 找到 Python → **解除安裝**
+2. 前往 [python.org/downloads/release/python-3128](https://www.python.org/downloads/release/python-3128/)，往下捲到 **Files**，下載 **Windows installer (64-bit)**
+3. 雙擊安裝，**最下面的「Add Python to PATH」一定要打勾**，再按 **Install Now**
+4. **關掉所有舊的命令提示字元視窗**，重新開一個，重新執行步驟 C：
+   ```
+   python -m pip install pymobiledevice3
+   ```
+5. 這次套件會直接下載現成安裝檔（檔名含 `cp312`），不再編譯，最後看到 `Successfully installed ...` 就成功了
+
+> 另一個辦法是去裝「Microsoft C++ Build Tools」，但要下載好幾 GB、裝很久，不建議。換 Python 3.12 省事得多。
+
+</details>
+
+<details>
+<summary>❓ 問題八：搖桿或地圖點了，但 iPhone 定位沒動</summary>
 
 1. 先確認狀態圓點是 **綠色**（不是的話先解決連線，見問題六）
 2. 某些 App（尤其 Pokémon GO）需要在 GPS 改變後 **重新打開 App** 才會讀到新位置
@@ -376,7 +404,7 @@ for /f "tokens=5" %a in ('netstat -ano ^| findstr :8765') do taskkill /PID %a /F
 </details>
 
 <details>
-<summary>❓ 問題八：停止後 iPhone GPS 仍停在假位置</summary>
+<summary>❓ 問題九：停止後 iPhone GPS 仍停在假位置</summary>
 
 這是正常的，不是故障。**把 USB 線拔掉**，等約 5 到 10 秒，iPhone GPS 會自動恢復真實位置。
 
