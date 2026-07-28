@@ -728,7 +728,15 @@ Wait for: `Device connected. Ready to spoof.`
 | Speed | Drag the slider (5 = walking, 12 = jogging, 25 = cycling) |
 | Save a spot | Pick an icon, type a name, click **Save** |
 | Jump to saved spot | Click **Go** next to any saved spot |
+| GPS Physics Engine | Simulates natural Ornstein-Uhlenbeck random walk drift, lateral gait step sway (0.15m), and GDOP altitude drift |
 | Stop faking GPS | Click red **⏹ Stop Spoofing** button, then unplug USB |
+
+### High-Fidelity GPS Physics Engine
+
+Includes a continuous stochastic physics model to prevent anti-cheat detection and simulate natural human walking step cadence:
+- **Ornstein-Uhlenbeck (OU) Random Walk Jitter:** Models natural GPS scintillation noise with mean-reversion ($\alpha = 0.05$), capped bounded under a $3\sigma$ (4m) limit.
+- **Gait Jitter (Lateral Step Sway):** Applies $0.15\text{m} \times \mathcal{N}(0,1)$ Gaussian lateral displacement perpendicular to movement, reproducing natural human footstep cadence.
+- **GDOP Precision & Altitude Drift:** Simulates tropospheric atmospheric delay and satellite geometric fluctuations.
 
 ### Troubleshooting Quick Reference
 

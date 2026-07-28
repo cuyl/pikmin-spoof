@@ -46,10 +46,13 @@ class LocationController:
         t = threading.Thread(target=self._run, daemon=True)
         t.start()
 
-    def set_location(self, lat: float, lon: float):
+    def set_location(self, lat: float, lon: float, alt: float | None = None):
         """Called from HTTP handler thread — non-blocking."""
         with self._lock:
-            self._latest = (lat, lon)
+            if alt is not None:
+                self._latest = (lat, lon, alt)
+            else:
+                self._latest = (lat, lon)
         if self._loop and self._event:
             self._loop.call_soon_threadsafe(self._event.set)
 
@@ -96,7 +99,10 @@ class LocationController:
                                     self._latest = None
 
                             if last_sent:
-                                await loc.set(last_sent[0], last_sent[1])
+                                if len(last_sent) >= 3:
+                                    await loc.set(last_sent[0], last_sent[1], last_sent[2])
+                                else:
+                                    await loc.set(last_sent[0], last_sent[1])
 
         except Exception as e:
             self.connected = False
@@ -444,6 +450,28 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   </div>
 
   <div class="section">
+    <div class="section-label">GPS Physics & Anti-Cheat Engine</div>
+    <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="physics-ou" checked onchange="togglePhysicsOptions()">
+        <span>Ornstein-Uhlenbeck Drift (Slow Jitter)</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="physics-gait" checked onchange="togglePhysicsOptions()">
+        <span>Gait Jitter (0.15m Lateral Sway)</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="physics-gdop" checked onchange="togglePhysicsOptions()">
+        <span>Slow Altitude & GDOP Precision Drift</span>
+      </label>
+    </div>
+    <div id="physics-hud" style="margin-top:10px; padding:8px 10px; background:#1c1c1e; border:1px solid #3a3a3c; border-radius:6px; font-size:11px; font-family:monospace; color:#30d158; display:flex; flex-direction:column; gap:3px;">
+      <div>Drift: <span id="hud-drift">0.00m</span> / 4.0m cap</div>
+      <div>Alt: <span id="hud-alt">10.0m</span> | GDOP: <span id="hud-gdop">5.0m</span></div>
+    </div>
+  </div>
+
+  <div class="section">
     <button class="btn-red" onclick="stopSpoofing()">⏹ Stop Spoofing</button>
     <div style="font-size:11px;color:#636366;margin-top:8px;text-align:center;">
       Disconnect USB cable to fully restore real GPS
@@ -476,6 +504,108 @@ async function reclaimControl() {
     });
     pollStatus();
   } catch(e) {}
+}
+
+// ── High-Fidelity GPS Physics & Jitter Engine ────────────────────────────────
+class GPSPhysicsEngine {
+  constructor() {
+    this.ouX = 0.0;
+    this.ouY = 0.0;
+    this.alpha = 0.05; // Mean-reversion coefficient (5%/s)
+    this.sigma = 0.3;  // Drift intensity
+    this.maxDrift = 4.0; // 3-sigma hard cap (4 meters)
+
+    this.altitudeBase = 10.0;
+    this.altitudeDrift = 0.0;
+    this.accuracyBase = 5.0;
+    this.accuracyDrift = 0.0;
+
+    this.useOU = true;
+    this.useGait = true;
+    this.useGDOP = true;
+  }
+
+  randomGaussian() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  }
+
+  update(dt) {
+    if (this.useOU) {
+      const dWx = this.randomGaussian() * Math.sqrt(dt);
+      const dWy = this.randomGaussian() * Math.sqrt(dt);
+      this.ouX += -this.alpha * this.ouX * dt + this.sigma * dWx;
+      this.ouY += -this.alpha * this.ouY * dt + this.sigma * dWy;
+
+      const dist = Math.hypot(this.ouX, this.ouY);
+      if (dist > this.maxDrift) {
+        this.ouX = (this.ouX / dist) * this.maxDrift;
+        this.ouY = (this.ouY / dist) * this.maxDrift;
+      }
+    } else {
+      this.ouX = 0.0;
+      this.ouY = 0.0;
+    }
+
+    if (this.useGDOP) {
+      const dWAlt = this.randomGaussian() * Math.sqrt(dt);
+      this.altitudeDrift += -0.02 * this.altitudeDrift * dt + 0.08 * dWAlt;
+      this.altitudeDrift = Math.max(-2.0, Math.min(2.0, this.altitudeDrift));
+
+      const dWAcc = this.randomGaussian() * Math.sqrt(dt);
+      this.accuracyDrift += -0.02 * this.accuracyDrift * dt + 0.05 * dWAcc;
+      this.accuracyDrift = Math.max(-1.5, Math.min(3.0, this.accuracyDrift));
+    } else {
+      this.altitudeDrift = 0.0;
+      this.accuracyDrift = 0.0;
+    }
+  }
+
+  compute(lat, lon, dirX, dirY, isMoving, dt = 0.1) {
+    this.update(dt);
+
+    let offsetX = this.ouX;
+    let offsetY = this.ouY;
+
+    if (this.useGait && isMoving && (dirX !== 0 || dirY !== 0)) {
+      const len = Math.hypot(dirX, dirY);
+      if (len > 0) {
+        const perpX = -dirY / len;
+        const perpY = dirX / len;
+        const gaitDisp = 0.15 * this.randomGaussian();
+        offsetX += perpX * gaitDisp;
+        offsetY += perpY * gaitDisp;
+      }
+    }
+
+    const latDeg = 111000;
+    const lonDeg = 111000 * Math.cos(lat * Math.PI / 180);
+
+    const physicsLat = lat + (offsetY / latDeg);
+    const physicsLon = lon + (offsetX / lonDeg);
+    const alt = this.altitudeBase + this.altitudeDrift;
+    const acc = Math.max(2.0, this.accuracyBase + this.accuracyDrift);
+
+    const totalDrift = Math.hypot(offsetX, offsetY);
+    const driftEl = document.getElementById('hud-drift');
+    const altEl = document.getElementById('hud-alt');
+    const gdopEl = document.getElementById('hud-gdop');
+    if (driftEl) driftEl.textContent = totalDrift.toFixed(2) + 'm';
+    if (altEl) altEl.textContent = alt.toFixed(1) + 'm';
+    if (gdopEl) gdopEl.textContent = acc.toFixed(1) + 'm';
+
+    return { lat: physicsLat, lon: physicsLon, alt, acc, rawLat: lat, rawLon: lon };
+  }
+}
+
+const gpsPhysics = new GPSPhysicsEngine();
+
+function togglePhysicsOptions() {
+  gpsPhysics.useOU = document.getElementById('physics-ou').checked;
+  gpsPhysics.useGait = document.getElementById('physics-gait').checked;
+  gpsPhysics.useGDOP = document.getElementById('physics-gdop').checked;
 }
 
 const map = L.map('map').setView([37.7749, -122.4194], 16);
@@ -584,12 +714,12 @@ function showError(show) {
   document.getElementById('error-msg').style.display = show ? 'block' : 'none';
 }
 
-async function sendLocation(lat, lon) {
+async function sendLocation(lat, lon, alt) {
   try {
     await fetch('/jump', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ lat, lon, tabId: TAB_ID })
+      body: JSON.stringify({ lat, lon, alt, tabId: TAB_ID })
     });
   } catch(e) {}
 }
@@ -700,8 +830,10 @@ function tickWalk() {
   const dLon = walkTarget.lon - curLon;
   const distM = Math.hypot(dLat * latDeg, dLon * lonDeg);
   if (distM <= mpt) {
-    updateDisplay(walkTarget.lat, walkTarget.lon);
-    sendLocation(walkTarget.lat, walkTarget.lon);
+    curLat = walkTarget.lat; curLon = walkTarget.lon;
+    const phys = gpsPhysics.compute(curLat, curLon, 0, 0, false, 0.1);
+    updateDisplay(phys.lat, phys.lon);
+    sendLocation(phys.lat, phys.lon, phys.alt);
     map.removeLayer(waypointMarkers[0]);
     waypoints.shift(); waypointMarkers.shift();
     renumberMarkers(); updateRouteLine(); updateWaypointCount();
@@ -716,10 +848,11 @@ function tickWalk() {
     return;
   }
   const ratio = mpt / distM;
-  const newLat = curLat + dLat * ratio;
-  const newLon = curLon + dLon * ratio;
-  updateDisplay(newLat, newLon);
-  sendLocation(newLat, newLon);
+  curLat = curLat + dLat * ratio;
+  curLon = curLon + dLon * ratio;
+  const phys = gpsPhysics.compute(curLat, curLon, dLon, dLat, true, 0.1);
+  updateDisplay(phys.lat, phys.lon);
+  sendLocation(phys.lat, phys.lon, phys.alt);
   updateLeadLine();
 }
 
@@ -764,11 +897,20 @@ function tickJoystick() {
   const mpt = (speed / 3.6) * 0.1; // km/h → m/s → meters per 100ms tick
   const latDeg = 111000;
   const lonDeg = 111000 * Math.cos(curLat * Math.PI/180);
-  const newLat = curLat + (-jVec.dy * mpt / latDeg);
-  const newLon = curLon + ( jVec.dx * mpt / lonDeg);
-  updateDisplay(newLat, newLon);
-  sendLocation(newLat, newLon); // fire and forget — server takes latest only
+  curLat = curLat + (-jVec.dy * mpt / latDeg);
+  curLon = curLon + ( jVec.dx * mpt / lonDeg);
+  const phys = gpsPhysics.compute(curLat, curLon, jVec.dx, -jVec.dy, true, 0.1);
+  updateDisplay(phys.lat, phys.lon);
+  sendLocation(phys.lat, phys.lon, phys.alt);
 }
+
+// ── Periodic Stationary Drift (Holding GPS Lock with Natural Jitter) ────────
+setInterval(() => {
+  if (!walkActive && !jRunning) {
+    const phys = gpsPhysics.compute(curLat, curLon, 0, 0, false, 0.5);
+    sendLocation(phys.lat, phys.lon, phys.alt);
+  }
+}, 500);
 
 document.getElementById('lat').addEventListener('keydown', e => { if(e.key==='Enter') jump(); });
 document.getElementById('lon').addEventListener('keydown', e => { if(e.key==='Enter') jump(); });
@@ -1088,8 +1230,9 @@ class Handler(BaseHTTPRequestHandler):
 
             if is_allowed:
                 lat, lon = body['lat'], body['lon']
+                alt = body.get('alt')
                 if controller:
-                    controller.set_location(lat, lon)
+                    controller.set_location(lat, lon, alt)
                 save_position(lat, lon)
                 data = {
                     'ok': True,
