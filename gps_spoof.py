@@ -20,6 +20,7 @@ import os
 import signal
 import sys
 import threading
+import time
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -464,26 +465,18 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
 </div>
 
 <script>
-// Single Tab Enforcement via BroadcastChannel
-const tabChannel = new BroadcastChannel('gps_spoof_single_tab');
-const TAB_ID = Math.random().toString(36).substring(2);
+const TAB_ID = Math.random().toString(36).substring(2) + Date.now().toString(36);
 
-function claimControl() {
-  document.getElementById('duplicate-tab-overlay').style.display = 'none';
-  tabChannel.postMessage({ type: 'CLAIM_CONTROL', tabId: TAB_ID });
+async function reclaimControl() {
+  try {
+    await fetch('/claim_session', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ tabId: TAB_ID })
+    });
+    pollStatus();
+  } catch(e) {}
 }
-
-function reclaimControl() {
-  claimControl();
-}
-
-tabChannel.onmessage = (event) => {
-  if (event.data && event.data.type === 'CLAIM_CONTROL' && event.data.tabId !== TAB_ID) {
-    document.getElementById('duplicate-tab-overlay').style.display = 'flex';
-  }
-};
-
-claimControl();
 
 const map = L.map('map').setView([37.7749, -122.4194], 16);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -559,11 +552,20 @@ bgTick.onmessage = () => {
 async function pollStatus() {
   try {
     const res = await fetch('/status', { method: 'POST',
-      headers: {'Content-Type':'application/json'}, body: '{}' });
+      headers: {'Content-Type':'application/json'}, body: JSON.stringify({ tabId: TAB_ID }) });
     const d = await res.json();
     document.getElementById('status-text').textContent = d.status;
     const dot = document.getElementById('dot');
     dot.className = d.connected ? 'active' : (d.status.includes('Connecting') ? 'connecting' : '');
+
+    const overlay = document.getElementById('duplicate-tab-overlay');
+    if (d.is_active === false) {
+      overlay.style.display = 'flex';
+      stopWalk();
+      stopJoystick();
+    } else {
+      overlay.style.display = 'none';
+    }
   } catch(e) {}
 }
 setInterval(pollStatus, 1000);
@@ -587,7 +589,7 @@ async function sendLocation(lat, lon) {
     await fetch('/jump', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ lat, lon })
+      body: JSON.stringify({ lat, lon, tabId: TAB_ID })
     });
   } catch(e) {}
 }
@@ -988,6 +990,12 @@ loadInitPosition();
 </html>"""
 
 
+# ── Server Session Lock ────────────────────────────────────────────────────────
+active_tab_id: str | None = None
+active_tab_last_seen: float = 0.0
+session_lock = threading.Lock()
+
+
 # ── HTTP Server ────────────────────────────────────────────────────────────────
 
 class Handler(BaseHTTPRequestHandler):
@@ -1016,13 +1024,29 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(HTML.encode('utf-8'))
 
     def do_POST(self):
+        global active_tab_id, active_tab_last_seen
         length = int(self.headers.get('Content-Length', 0))
         body = json.loads(self.rfile.read(length)) if length else {}
+        client_tab_id = body.get('tabId')
 
-        if self.path == '/status':
+        if self.path == '/claim_session':
+            with session_lock:
+                active_tab_id = client_tab_id
+                active_tab_last_seen = time.time()
+            data = {'ok': True, 'active_tab_id': active_tab_id}
+        elif self.path == '/status':
+            with session_lock:
+                now = time.time()
+                if client_tab_id and (active_tab_id is None or (now - active_tab_last_seen > 10.0)):
+                    active_tab_id = client_tab_id
+                if client_tab_id and client_tab_id == active_tab_id:
+                    active_tab_last_seen = now
+                is_active = (client_tab_id == active_tab_id) if client_tab_id else True
+
             data = {
                 'connected': controller.connected if controller else False,
-                'status': controller.status if controller else 'No controller'
+                'status': controller.status if controller else 'No controller',
+                'is_active': is_active
             }
         elif self.path == '/favorites/add':
             fi = body.get('folderIdx', 0)
@@ -1059,14 +1083,20 @@ class Handler(BaseHTTPRequestHandler):
                 save_favorites()
             data = {'ok': True}
         else:  # /jump
-            lat, lon = body['lat'], body['lon']
-            if controller:
-                controller.set_location(lat, lon)
-            save_position(lat, lon)
-            data = {
-                'ok': True,
-                'status': controller.status if controller else 'ok'
-            }
+            with session_lock:
+                is_allowed = (client_tab_id is None or active_tab_id is None or client_tab_id == active_tab_id)
+
+            if is_allowed:
+                lat, lon = body['lat'], body['lon']
+                if controller:
+                    controller.set_location(lat, lon)
+                save_position(lat, lon)
+                data = {
+                    'ok': True,
+                    'status': controller.status if controller else 'ok'
+                }
+            else:
+                data = {'ok': False, 'error': 'Tab inactive'}
 
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
