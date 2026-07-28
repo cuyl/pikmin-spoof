@@ -459,21 +459,18 @@ Enable Developer Mode on iPhone (iOS 16+): Settings → Privacy & Security → s
 
 ### Every Time You Use It
 
-You need **two Command Prompt windows**.
+You can now start the tunnel and the GPS server from a single command.
 
-**Window 1 — Run as Administrator, keep it open the whole session:**
+**Command Prompt:**
 ```
-python -m pymobiledevice3 remote start-tunnel
+python gps_spoof.py
 ```
-- No `sudo` on Windows.
-- On first run it may prompt to install the **WinTun** driver — install it and rerun.
-- Wait for `RSD Address` and `RSD Port` — write them down.
-
-**Window 2 (normal, not admin):**
+- This will start `pymobiledevice3` tunnel output and then open the local UI.
+- If you already have an `RSD Address` and `RSD Port`, you can pass them manually:
 ```
 python gps_spoof.py --rsd YOUR_RSD_ADDRESS YOUR_RSD_PORT
 ```
-Wait for: `Device connected. Ready to spoof.`
+- Wait for: `Device connected. Ready to spoof.`
 
 **Browser:** Go to `http://localhost:8765` — wait for the green dot in the top left.
 

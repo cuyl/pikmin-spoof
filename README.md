@@ -698,19 +698,19 @@ Settings → Privacy & Security → scroll to bottom → Developer Mode → turn
 
 ### Every Time You Use It
 
-You need **two Terminal windows** open at the same time:
+You only need one Terminal window and a browser.
 
-**Terminal 1** — keep open the whole session:
+**Terminal:**
 ```
-sudo python3 -m pymobiledevice3 remote start-tunnel
+python3 gps_spoof.py
 ```
-Enter your Mac login password when asked (nothing will appear as you type — that's normal).
-Wait for lines showing `RSD Address` and `RSD Port` — write these down.
+This will start the `pymobiledevice3` tunnel and then launch the local UI.
 
-**Terminal 2:**
+If you already have an `RSD Address` and `RSD Port`, you may pass them manually:
 ```
 python3 gps_spoof.py --rsd YOUR_RSD_ADDRESS YOUR_RSD_PORT
 ```
+
 Wait for: `Device connected. Ready to spoof.`
 
 **Browser:** Go to `http://localhost:8765` — wait for the green dot in the top left.

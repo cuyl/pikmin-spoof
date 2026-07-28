@@ -3,8 +3,13 @@
 GPS Spoof — persistent connection version.
 Uses pymobiledevice3 Python API directly for fast joystick updates.
 
-Terminal 1: sudo python3 -m pymobiledevice3 remote start-tunnel
+When --rsd <HOST> <PORT> is provided, the script connects via
+RemoteServiceDiscoveryService. Otherwise it falls back to
+UserspaceRsdTunnel for the default local RSD flow.
+
+Terminal 1 (optional): sudo python3 -m pymobiledevice3 remote start-tunnel
 Terminal 2: python3 gps_spoof.py --rsd <HOST> <PORT>
+Or without RSD arguments: python3 gps_spoof.py
 Then open:  http://localhost:8765
 """
 
@@ -53,12 +58,20 @@ class LocationController:
         from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
         from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
+        from pymobiledevice3.remote.userspace_tunnel import UserspaceRsdTunnel
 
         self._loop = asyncio.get_running_loop()
         self._event = asyncio.Event()
 
         try:
-            async with RemoteServiceDiscoveryService((self.rsd_host, self.rsd_port)) as rsd:
+            if self.rsd_host is not None and self.rsd_port is not None:
+                print(f'  Connecting to RSD at {self.rsd_host}:{self.rsd_port}...')
+                rsd_service = RemoteServiceDiscoveryService((self.rsd_host, self.rsd_port))
+            else:
+                print('  Connecting to RSD at default host/port...')
+                rsd_service = UserspaceRsdTunnel(serial=None, autopair=True)
+
+            async with rsd_service as rsd:
                 async with DvtProvider(rsd) as dvt:
                     async with LocationSimulation(dvt) as loc:
                         self.connected = True
@@ -1065,11 +1078,13 @@ def _free_port(port):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--rsd', nargs=2, metavar=('HOST', 'PORT'), required=True,
+    parser.add_argument('--rsd', nargs=2, metavar=('HOST', 'PORT'),
                         help='RSD address and port from: sudo python3 -m pymobiledevice3 remote start-tunnel')
     args = parser.parse_args()
-
-    rsd_host, rsd_port = args.rsd[0], int(args.rsd[1])
+    if args.rsd:
+        rsd_host, rsd_port = args.rsd[0], int(args.rsd[1])
+    else:
+        rsd_host, rsd_port = None, None  # Use default RSD host/port if not provided
     load_favorites()
     controller = LocationController(rsd_host, rsd_port)
 
