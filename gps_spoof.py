@@ -112,6 +112,8 @@ class LocationController:
             self.connected = False
             self._loop = None
             self._event = None
+            print('\n  Device connection closed. Exiting...')
+            os._exit(0)
 
 
 controller: LocationController | None = None
@@ -431,8 +433,8 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   <div class="section">
     <div class="section-label">Movement Speed</div>
     <div class="speed-row">
-      <input type="range" id="speed" min="1" max="200" value="20" oninput="onSpeedChange()">
-      <div id="speed-label">20 km/h</div>
+      <input type="range" id="speed" min="1" max="200" value="19" oninput="onSpeedChange()">
+      <div id="speed-label">19 km/h</div>
     </div>
     <div class="speed-hint">Walking ≈ 5 · Running ≈ 12 · Cycling ≈ 25 · Fast test ≈ 80+</div>
   </div>
@@ -668,7 +670,7 @@ function updateWaypointCount() {
   }
 }
 
-let curLat = 37.7749, curLon = -122.4194, speed = 20; // km/h
+let curLat = 37.7749, curLon = -122.4194, speed = 19; // km/h
 let jVec = { dx: 0, dy: 0 }, jRunning = false, jActive = false;
 let waypoints = [], walkActive = false, walkTarget = null, waypointMarkers = [], routeLine = null, leadLine = null;
 
