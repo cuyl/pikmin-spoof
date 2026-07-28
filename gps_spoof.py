@@ -53,8 +53,11 @@ class LocationController:
                 self._latest = (lat, lon, alt)
             else:
                 self._latest = (lat, lon)
-        if self._loop and self._event:
-            self._loop.call_soon_threadsafe(self._event.set)
+        if self._loop and self._event and self._loop.is_running():
+            try:
+                self._loop.call_soon_threadsafe(self._event.set)
+            except RuntimeError:
+                pass
 
     def _run(self):
         asyncio.run(self._async_main())
@@ -108,6 +111,10 @@ class LocationController:
             self.connected = False
             self.status = 'Phone disconnected'
             print(f'  Connection error: {e}')
+        finally:
+            self.connected = False
+            self._loop = None
+            self._event = None
 
 
 controller: LocationController | None = None
