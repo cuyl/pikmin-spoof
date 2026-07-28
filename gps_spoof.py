@@ -102,10 +102,7 @@ class LocationController:
                                     self._latest = None
 
                             if last_sent:
-                                if len(last_sent) >= 3:
-                                    await loc.set(last_sent[0], last_sent[1], last_sent[2])
-                                else:
-                                    await loc.set(last_sent[0], last_sent[1])
+                                await loc.set(last_sent[0], last_sent[1])
 
         except Exception as e:
             self.connected = False
