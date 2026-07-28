@@ -452,7 +452,39 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
 
 <div id="map"></div>
 
+<div id="duplicate-tab-overlay" style="display:none; position:fixed; inset:0; background:rgba(28,28,30,0.92); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); z-index:99999; color:white; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px;">
+  <div style="font-size:48px; margin-bottom:16px;">⚠️</div>
+  <h2 style="font-size:20px; font-weight:700; margin-bottom:8px;">GPS Spoof Active in Another Tab</h2>
+  <p style="color:#8e8e93; font-size:14px; max-width:360px; line-height:1.5; margin-bottom:24px;">
+    To prevent conflicting movement commands, only one browser tab can control GPS Spoof at a time.
+  </p>
+  <button onclick="reclaimControl()" style="padding:12px 28px; font-size:15px; font-weight:600; background:#007aff; color:white; border:none; border-radius:10px; cursor:pointer;">
+    Use This Tab Here
+  </button>
+</div>
+
 <script>
+// Single Tab Enforcement via BroadcastChannel
+const tabChannel = new BroadcastChannel('gps_spoof_single_tab');
+const TAB_ID = Math.random().toString(36).substring(2);
+
+function claimControl() {
+  document.getElementById('duplicate-tab-overlay').style.display = 'none';
+  tabChannel.postMessage({ type: 'CLAIM_CONTROL', tabId: TAB_ID });
+}
+
+function reclaimControl() {
+  claimControl();
+}
+
+tabChannel.onmessage = (event) => {
+  if (event.data && event.data.type === 'CLAIM_CONTROL' && event.data.tabId !== TAB_ID) {
+    document.getElementById('duplicate-tab-overlay').style.display = 'flex';
+  }
+};
+
+claimControl();
+
 const map = L.map('map').setView([37.7749, -122.4194], 16);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '© OpenStreetMap'
