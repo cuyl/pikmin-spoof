@@ -512,8 +512,8 @@ class GPSPhysicsEngine {
     this.ouX = 0.0;
     this.ouY = 0.0;
     this.alpha = 0.05; // Mean-reversion coefficient (5%/s)
-    this.sigma = 0.3;  // Drift intensity
-    this.maxDrift = 4.0; // 3-sigma hard cap (4 meters)
+    this.sigma = 0.08; // Smooth drift intensity (meters/sec^0.5)
+    this.maxDrift = 2.5; // Bounded 2.5m radius cap
 
     this.altitudeBase = 10.0;
     this.altitudeDrift = 0.0;
@@ -832,7 +832,7 @@ function tickWalk() {
   if (distM <= mpt) {
     curLat = walkTarget.lat; curLon = walkTarget.lon;
     const phys = gpsPhysics.compute(curLat, curLon, 0, 0, false, 0.1);
-    updateDisplay(phys.lat, phys.lon);
+    updateDisplay(curLat, curLon);
     sendLocation(phys.lat, phys.lon, phys.alt);
     map.removeLayer(waypointMarkers[0]);
     waypoints.shift(); waypointMarkers.shift();
@@ -851,7 +851,7 @@ function tickWalk() {
   curLat = curLat + dLat * ratio;
   curLon = curLon + dLon * ratio;
   const phys = gpsPhysics.compute(curLat, curLon, dLon, dLat, true, 0.1);
-  updateDisplay(phys.lat, phys.lon);
+  updateDisplay(curLat, curLon);
   sendLocation(phys.lat, phys.lon, phys.alt);
   updateLeadLine();
 }
@@ -900,7 +900,7 @@ function tickJoystick() {
   curLat = curLat + (-jVec.dy * mpt / latDeg);
   curLon = curLon + ( jVec.dx * mpt / lonDeg);
   const phys = gpsPhysics.compute(curLat, curLon, jVec.dx, -jVec.dy, true, 0.1);
-  updateDisplay(phys.lat, phys.lon);
+  updateDisplay(curLat, curLon);
   sendLocation(phys.lat, phys.lon, phys.alt);
 }
 
