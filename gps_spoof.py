@@ -227,7 +227,17 @@ button:active { opacity: 0.7; }
 
 .speed-row { display: flex; align-items: center; gap: 10px; }
 input[type=range] { flex: 1; accent-color: #0a84ff; }
-#speed-label { font-size: 12px; color: #aeaeb2; width: 52px; text-align: right; }
+.speed-input-container { display: flex; align-items: center; gap: 4px; color: #aeaeb2; font-size: 12px; }
+.speed-num-input {
+  width: 48px; background: #1c1c1e; border: 1px solid #3a3a3c;
+  border-radius: 6px; color: #0a84ff; font-weight: 700; font-size: 13px;
+  text-align: center; padding: 3px 2px; outline: none;
+}
+.speed-num-input:focus { border-color: #0a84ff; }
+.speed-num-input::-webkit-inner-spin-button, .speed-num-input::-webkit-outer-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.speed-num-input[type=number] { -moz-appearance: textfield; }
 .speed-hint { font-size: 11px; color: #636366; margin-top: 6px; }
 
 #joystick-wrap { display: flex; justify-content: center; padding-top: 4px; }
@@ -433,8 +443,11 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   <div class="section">
     <div class="section-label">Movement Speed</div>
     <div class="speed-row">
-      <input type="range" id="speed" min="1" max="200" value="19" oninput="onSpeedChange()">
-      <div id="speed-label">19 km/h</div>
+      <input type="range" id="speed-slider" min="1" max="200" value="19" oninput="onSpeedSliderChange()">
+      <div class="speed-input-container">
+        <input type="number" id="speed-input" class="speed-num-input" min="1" max="500" value="19" oninput="onSpeedInputChange()" onblur="onSpeedInputBlur()">
+        <span>km/h</span>
+      </div>
     </div>
     <div class="speed-hint">Walking ≈ 5 · Running ≈ 12 · Cycling ≈ 25 · Fast test ≈ 80+</div>
   </div>
@@ -744,9 +757,32 @@ function useCurrent() {
   document.getElementById('lon').value = curLon.toFixed(6);
 }
 
-function onSpeedChange() {
-  speed = parseInt(document.getElementById('speed').value);
-  document.getElementById('speed-label').textContent = speed + ' km/h';
+function onSpeedSliderChange() {
+  const slider = document.getElementById('speed-slider');
+  const input = document.getElementById('speed-input');
+  speed = parseInt(slider.value) || 1;
+  input.value = speed;
+}
+
+function onSpeedInputChange() {
+  const slider = document.getElementById('speed-slider');
+  const input = document.getElementById('speed-input');
+  let val = parseInt(input.value);
+  if (!isNaN(val) && val >= 1) {
+    speed = val;
+    slider.value = Math.min(val, 200);
+  }
+}
+
+function onSpeedInputBlur() {
+  const input = document.getElementById('speed-input');
+  let val = parseInt(input.value);
+  if (isNaN(val) || val < 1) {
+    val = 19;
+  }
+  speed = val;
+  input.value = speed;
+  document.getElementById('speed-slider').value = Math.min(speed, 200);
 }
 
 function stopSpoofing() {
