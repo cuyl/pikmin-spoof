@@ -20,6 +20,7 @@ import os
 import signal
 import sys
 import threading
+import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
@@ -1074,12 +1075,24 @@ def _free_port(port):
             pass
 
 
+def open_browser(url: str, delay: float = 0.5):
+    """Automatically open the default web browser to the specified URL after a short delay."""
+    def _open():
+        webbrowser.open(url)
+
+    timer = threading.Timer(delay, _open)
+    timer.daemon = True
+    timer.start()
+
+
 # ── Entry Point ────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--rsd', nargs=2, metavar=('HOST', 'PORT'),
                         help='RSD address and port from: sudo python3 -m pymobiledevice3 remote start-tunnel')
+    parser.add_argument('--no-browser', action='store_true',
+                        help='Do not automatically open default web browser on startup')
     args = parser.parse_args()
     if args.rsd:
         rsd_host, rsd_port = args.rsd[0], int(args.rsd[1])
@@ -1093,9 +1106,13 @@ if __name__ == '__main__':
     HTTPServer.allow_reuse_address = True
     server = HTTPServer(('localhost', port), Handler)
 
+    url = f'http://localhost:{port}'
+    if not args.no_browser:
+        open_browser(url)
+
     print()
     print('  GPS Spoof is running!')
-    print(f'  Open in browser → http://localhost:{port}')
+    print(f'  Open in browser → {url}')
     print()
     print('  Waiting for device connection...')
     print('  Press Ctrl+C to stop.')
