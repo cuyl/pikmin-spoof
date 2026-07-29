@@ -238,7 +238,9 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   -webkit-appearance: none; margin: 0;
 }
 .speed-num-input[type=number] { -moz-appearance: textfield; }
-.speed-hint { font-size: 11px; color: #636366; margin-top: 6px; }
+.speed-hint { font-size: 11px; color: #636366; margin-top: 6px; line-height: 1.5; }
+.speed-preset { cursor: pointer; transition: color 0.15s; }
+.speed-preset:hover { color: #0a84ff; text-decoration: underline; }
 
 #joystick-wrap { display: flex; justify-content: center; padding-top: 4px; }
 #joystick {
@@ -449,7 +451,13 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
         <span>km/h</span>
       </div>
     </div>
-    <div class="speed-hint">Walking ≈ 5 · Running ≈ 12 · Cycling ≈ 25 · Fast test ≈ 80+</div>
+    <div class="speed-hint">
+      <span class="speed-preset" onclick="setQuickSpeed(5)">Walking ≈ 5</span> · 
+      <span class="speed-preset" onclick="setQuickSpeed(12)">Running ≈ 12</span> · 
+      <span class="speed-preset" onclick="setQuickSpeed(19)">Planting ≈ 19</span> · 
+      <span class="speed-preset" onclick="setQuickSpeed(25)">Cycling ≈ 25</span> · 
+      <span class="speed-preset" onclick="setQuickSpeed(80)">Fast test ≈ 80+</span>
+    </div>
   </div>
 
   <div class="section">
@@ -782,6 +790,12 @@ function onSpeedInputBlur() {
   }
   speed = val;
   input.value = speed;
+  document.getElementById('speed-slider').value = Math.min(speed, 200);
+}
+
+function setQuickSpeed(v) {
+  speed = v;
+  document.getElementById('speed-input').value = speed;
   document.getElementById('speed-slider').value = Math.min(speed, 200);
 }
 
