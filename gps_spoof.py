@@ -15,6 +15,7 @@ Then open:  http://localhost:8765
 
 import argparse
 import asyncio
+import atexit
 import json
 import os
 import signal
@@ -332,17 +333,83 @@ def save_favorites():
 
 POSITION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'last_position.json')
 
-def load_position() -> tuple[float, float]:
-    try:
-        with open(POSITION_FILE) as f:
-            d = json.load(f)
-            return float(d['lat']), float(d['lon'])
-    except (FileNotFoundError, json.JSONDecodeError, KeyError):
-        return 37.7749, -122.4194  # default: San Francisco
+_current_position: tuple[float, float] | None = None
+_last_disk_write_time: float = 0.0
+_position_dirty: bool = False
+_position_timer: threading.Timer | None = None
+_position_lock = threading.Lock()
 
-def save_position(lat: float, lon: float):
-    with open(POSITION_FILE, 'w') as f:
-        json.dump({'lat': lat, 'lon': lon}, f)
+POSITION_SAVE_INTERVAL = 3.0  # minimum seconds between disk writes while moving
+
+
+def load_position() -> tuple[float, float]:
+    global _current_position
+    with _position_lock:
+        if _current_position is not None:
+            return _current_position
+        try:
+            with open(POSITION_FILE) as f:
+                d = json.load(f)
+                _current_position = (float(d['lat']), float(d['lon']))
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            _current_position = (37.7749, -122.4194)  # default: San Francisco
+        return _current_position
+
+
+def _write_position_to_disk():
+    global _position_dirty, _last_disk_write_time, _position_timer
+    with _position_lock:
+        if _position_timer:
+            _position_timer.cancel()
+            _position_timer = None
+        if not _position_dirty or _current_position is None:
+            return
+        lat, lon = _current_position
+        _position_dirty = False
+        _last_disk_write_time = time.time()
+
+    try:
+        with open(POSITION_FILE, 'w') as f:
+            json.dump({'lat': lat, 'lon': lon}, f)
+    except Exception:
+        pass
+
+
+def flush_position():
+    """Flush pending position changes to disk immediately."""
+    _write_position_to_disk()
+
+
+atexit.register(flush_position)
+
+
+def save_position(lat: float, lon: float, force: bool = False):
+    global _current_position, _position_dirty, _position_timer, _last_disk_write_time
+    now = time.time()
+    with _position_lock:
+        _current_position = (lat, lon)
+        _position_dirty = True
+
+        if force or (now - _last_disk_write_time >= POSITION_SAVE_INTERVAL):
+            if _position_timer:
+                _position_timer.cancel()
+                _position_timer = None
+            _position_dirty = False
+            _last_disk_write_time = now
+            should_write_now = True
+        else:
+            should_write_now = False
+            if _position_timer is None:
+                _position_timer = threading.Timer(POSITION_SAVE_INTERVAL, _write_position_to_disk)
+                _position_timer.daemon = True
+                _position_timer.start()
+
+    if should_write_now:
+        try:
+            with open(POSITION_FILE, 'w') as f:
+                json.dump({'lat': lat, 'lon': lon}, f)
+        except Exception:
+            pass
 
 
 # ── HTML ───────────────────────────────────────────────────────────────────────
