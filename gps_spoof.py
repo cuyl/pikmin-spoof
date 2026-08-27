@@ -757,7 +757,7 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   <div class="section">
     <button class="btn-red" onclick="stopSpoofing()">⏹ Stop Spoofing</button>
     <div style="font-size:11px;color:#636366;margin-top:8px;text-align:center;">
-      Disconnect USB cable to fully restore real GPS
+      Disconnect device or stop tunnel to fully restore real GPS
     </div>
   </div>
 </div>
