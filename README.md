@@ -771,6 +771,7 @@ Wait for: `Device connected. Ready to spoof.`
 | Jump to a location | Enter latitude and longitude → click **Jump** |
 | Walk to a location | Click anywhere on the map |
 | Set a multi-point route | Click multiple places — GPS walks through them in order |
+| Drag a numbered pin | Edits / moves that waypoint location |
 | Click a numbered pin | Removes that waypoint |
 | Drag the map marker | Drag the pin to move GPS precisely |
 | Joystick | Hold the blue knob and drag in any direction |

@@ -1019,6 +1019,7 @@ overlayCtrl.onAdd = () => {
   div.innerHTML =
     '<div class="wp-badge" id="wp-badge"></div>' +
     '<div>Click map — add waypoint</div>' +
+    '<div>Drag numbered pin — edit</div>' +
     '<div>Click numbered pin — remove</div>';
   return div;
 };
@@ -1166,7 +1167,7 @@ function stopSpoofing() {
 function numberedIcon(n) {
   return L.divIcon({
     className: '',
-    html: `<div style="background:#0a84ff;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:pointer;">${n}</div>`,
+    html: `<div style="background:#0a84ff;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:grab;user-select:none;">${n}</div>`,
     iconSize: [26, 26], iconAnchor: [13, 13]
   });
 }
@@ -1213,9 +1214,35 @@ function removeWaypoint(idx) {
 
 function addWaypoint(lat, lon) {
   waypoints.push({ lat, lon });
-  const m = L.marker([lat, lon], { icon: numberedIcon(waypoints.length) }).addTo(map);
+  const m = L.marker([lat, lon], { icon: numberedIcon(waypoints.length), draggable: true }).addTo(map);
+  const onDrag = () => {
+    const idx = waypointMarkers.indexOf(m);
+    if (idx === -1) return;
+    const pos = m.getLatLng();
+    const lng = ((pos.lng % 360) + 540) % 360 - 180;
+    waypoints[idx] = { lat: pos.lat, lon: lng };
+    if (idx === 0) {
+      walkTarget = waypoints[0];
+    }
+    updateRouteLine();
+    updateLeadLine();
+  };
+  m.on('drag', onDrag);
+  m.on('dragend', () => {
+    const idx = waypointMarkers.indexOf(m);
+    if (idx === -1) return;
+    const pos = m.getLatLng();
+    const lng = ((pos.lng % 360) + 540) % 360 - 180;
+    m.setLatLng([pos.lat, lng]);
+    waypoints[idx] = { lat: pos.lat, lon: lng };
+    if (idx === 0) {
+      walkTarget = waypoints[0];
+    }
+    updateRouteLine();
+    updateLeadLine();
+  });
   m.on('click', e => { L.DomEvent.stopPropagation(e); removeWaypoint(waypointMarkers.indexOf(m)); });
-  m.bindTooltip('Click to remove', { direction: 'top', offset: [0, -10] });
+  m.bindTooltip('Drag to edit • Click to remove', { direction: 'top', offset: [0, -10] });
   waypointMarkers.push(m);
   updateRouteLine();
   updateLeadLine();
