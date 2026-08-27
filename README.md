@@ -26,6 +26,7 @@
 
 - [你需要準備什麼](#-你需要準備什麼)
 - [第一次設定（一次性）](#-第一次設定一次性)
+- [舊使用者升級說明（從 10.x.x 升級）](#-舊使用者升級說明從-10xx-升級)
 - [每次使用的步驟](#-每次使用的步驟)
 - [Web UI 功能介紹](#-web-ui-功能介紹)
 - [常見問題與解決方法](#-常見問題與解決方法)
@@ -119,11 +120,14 @@ Python 是一個讓電腦跑程式的工具，這個 GPS 工具需要它才能�
 
 ### 步驟 A — 安裝必要的程式套件
 
+> 💡 **版本提示：** 本工具依賴 `pymobiledevice3` 的 **11.x.x** 版本。為避免未來套件大版本更新（如 v12+）發生破壞性改版（Breaking Changes）導致無法使用，指令已特別限制安裝 11 版區間。
+
 1. 打開終端機
 2. 把以下整行文字**複製**起來：
+   ```bash
+   pip3 install "pymobiledevice3>=11.0.0,<12"
    ```
-   pip3 install pymobiledevice3
-   ```
+   *（或者也可以在專案資料夾內直接執行 `pip3 install -r requirements.txt`）*
 3. 貼到終端機視窗中（`Command + V`）
 4. 按 `Return`
 5. 終端機會開始顯示一堆文字在跑，**這是正常的**，耐心等待
@@ -132,14 +136,36 @@ Python 是一個讓電腦跑程式的工具，這個 GPS 工具需要它才能�
 <!-- 📷 建議截圖：終端機顯示 "Successfully installed pymobiledevice3..." 的畫面 -->
 
 > **遇到錯誤 `Permission denied`？** 改用這個指令：
-> ```
-> pip3 install --user pymobiledevice3
+> ```bash
+> pip3 install --user "pymobiledevice3>=11.0.0,<12"
 > ```
 
 > **遇到錯誤 `pip3: command not found`？** 改用：
+> ```bash
+> pip install "pymobiledevice3>=11.0.0,<12"
 > ```
-> pip install pymobiledevice3
+
+---
+
+## 🔄 舊使用者升級說明（從 10.x.x 升級）
+
+如果你以前曾安裝過本工具（當時系統中安裝的是舊版 `pymobiledevice3` 10.x.x），由於底層連線 API 與通道管理架構升級，請先在終端機執行以下指令升級至 11.x.x 版本：
+
+```bash
+pip3 install --upgrade "pymobiledevice3>=11.0.0,<12"
+```
+
+> **若之前使用 `sudo` 安裝或遇到權限問題：**
+> ```bash
+> sudo pip3 install --upgrade "pymobiledevice3>=11.0.0,<12"
 > ```
+
+**如何確認目前安裝的版本：**
+在終端機輸入以下指令：
+```bash
+python3 -c "import importlib.metadata; print(importlib.metadata.version('pymobiledevice3'))"
+```
+若輸出開頭為 `11.`（例如 `11.1.3`），即代表升級成功！
 
 ---
 
@@ -603,18 +629,24 @@ Python 是一個讓電腦跑程式的工具，這個 GPS 工具需要它才能�
 </details>
 
 <details>
-<summary>❓ 問題六：終端機顯示「No module named pymobiledevice3」</summary>
+<summary>❓ 問題六：終端機顯示「No module named pymobiledevice3」或版本錯誤（ImportError / AttributeError）</summary>
 
-這表示套件沒有安裝成功，或安裝在了不同的 Python 環境裡。
+這表示套件沒有安裝成功，或安裝了舊版本（10.x.x）與現在的程式碼不相容。
 
-**解決方法：**
+**安裝或升級至 11.x.x 版本指令：**
+```bash
+pip3 install --upgrade "pymobiledevice3>=11.0.0,<12"
 ```
-pip3 install pymobiledevice3
+如果使用 `sudo` 或是遇到權限不足：
+```bash
+sudo pip3 install --upgrade "pymobiledevice3>=11.0.0,<12"
 ```
-如果遇到這個錯誤是在使用 `sudo` 的情況下，改用：
+
+**確認安裝版本：**
+```bash
+python3 -c "import importlib.metadata; print(importlib.metadata.version('pymobiledevice3'))"
 ```
-sudo pip3 install pymobiledevice3
-```
+確認輸出為 `11.x.x` 即可。
 
 </details>
 
@@ -667,6 +699,7 @@ sudo pip3 install pymobiledevice3
 ```
 pikmin-spoof/           （下載解壓縮後的資料夾名稱，從這裡執行工具）
 ├── gps_spoof.py        主程式（Python 伺服器 + 地圖控制介面）
+├── requirements.txt    Python 套件相依性清單（鎖定 pymobiledevice3 v11）
 ├── favorites.json      你儲存的收藏地點（自動產生，請別手動刪除）
 ├── last_position.json  上次的 GPS 位置（自動產生）
 └── GPSSpoofMac/
@@ -699,7 +732,13 @@ This tool lets you fake your iPhone's GPS location from your Mac — no jailbrea
 
 **Software (free, one-time install):**
 - Python 3.10 or higher — download at [python.org/downloads](https://www.python.org/downloads/)
-- pymobiledevice3 — install by opening Terminal and running: `pip3 install pymobiledevice3`
+- pymobiledevice3 (v11 required) — install by opening Terminal and running: `pip3 install "pymobiledevice3>=11.0.0,<12"` or `pip3 install -r requirements.txt`
+
+### Upgrading from pymobiledevice3 10.x.x
+If you previously used an older version of this tool, upgrade to v11:
+```bash
+pip3 install --upgrade "pymobiledevice3>=11.0.0,<12"
+```
 
 ### One-Time Setup
 
@@ -758,7 +797,7 @@ Includes a continuous stochastic physics model to prevent anti-cheat detection a
 | Can't find Developer Mode in Settings | iOS 15 or earlier: skip this step, it's not needed. iOS 16+: connect iPhone to Mac first, tap "Trust This Computer", then check Settings → Privacy & Security → scroll to bottom |
 | GPS not changing on iPhone | Restart the app on iPhone; ensure green dot is showing |
 | GPS stuck on fake location after stopping | Unplug the USB cable — real GPS restores in ~10 seconds |
-| `No module named pymobiledevice3` | Run: `pip3 install pymobiledevice3` |
+| `No module named pymobiledevice3` / Version Error | Run: `pip3 install --upgrade "pymobiledevice3>=11.0.0,<12"` |
 | Python not found | Install from [python.org/downloads](https://www.python.org/downloads/) |
 
 </details>

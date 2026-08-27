@@ -29,6 +29,7 @@
 
 - [你需要準備什麼](#-你需要準備什麼)
 - [第一次設定（一次性）](#️-第一次設定一次性)
+- [舊使用者升級說明（從 10.x.x 升級）](#-舊使用者升級說明從-10xx-升級)
 - [每次使用的步驟](#-每次使用的步驟)
 - [Web UI 功能介紹](#️-web-ui-功能介紹)
 - [常見問題與解決方法](#️-常見問題與解決方法)
@@ -62,7 +63,7 @@
 
 ### 軟體（免費，需要安裝一次）
 
-這個工具在 Windows 上需要裝三樣東西：**Python**、**Apple 裝置驅動**、**pymobiledevice3 套件**。下面會一步一步帶你裝完。
+這個工具在 Windows 上需要裝三樣東西：**Python**、**Apple 裝置驅動**、**pymobiledevice3 套件（需 v11 版本）**。下面會一步一步帶你裝完。
 
 ---
 
@@ -128,11 +129,14 @@ Windows 本身不認得 iPhone，需要 Apple 的驅動程式才能透過 USB �
 
 ### 步驟 C — 安裝必要的程式套件
 
+> 💡 **版本提示：** 本工具依賴 `pymobiledevice3` 的 **11.x.x** 版本。為避免未來套件大版本更新（如 v12+）發生破壞性改版（Breaking Changes）導致無法使用，指令已特別限制安裝 11 版區間。
+
 1. 開啟命令提示字元
 2. 把以下整行文字複製、貼上，按 `Enter`：
+   ```cmd
+   pip install "pymobiledevice3>=11.0.0,<12"
    ```
-   pip install pymobiledevice3
-   ```
+   *（或者也可以在專案資料夾內直接執行 `pip install -r requirements.txt`）*
 3. 終端機會開始顯示一堆文字在跑，**這是正常的**，耐心等待
 4. 等到你看到 `Successfully installed ...` 這樣的文字出現 → ✅ 安裝成功
 
@@ -141,11 +145,33 @@ Windows 本身不認得 iPhone，需要 Apple 的驅動程式才能透過 USB �
 > 最後出現的 `[notice] A new release of pip is available`（pip 有新版）**不是錯誤**，可以直接忽略。
 
 > **遇到錯誤 `pip 不是內部或外部命令`？** 改用：
-> ```
-> python -m pip install pymobiledevice3
+> ```cmd
+> python -m pip install "pymobiledevice3>=11.0.0,<12"
 > ```
 
 > ⚠️ **遇到 `Microsoft Visual C++ 14.0 or greater is required`？** 你的 Python 版本太新了（例如 3.14），請看下方常見問題的 **問題七**，換裝 Python 3.12 即可解決，不用裝任何編譯器。
+
+---
+
+## 🔄 舊使用者升級說明（從 10.x.x 升級）
+
+如果你以前曾安裝過本工具（當時系統中安裝的是舊版 `pymobiledevice3` 10.x.x），由於底層連線 API 與通道管理架構升級，請先在命令提示字元執行以下指令升級至 11.x.x 版本：
+
+```cmd
+pip install --upgrade "pymobiledevice3>=11.0.0,<12"
+```
+
+> **若 `pip` 找不到命令，改用：**
+> ```cmd
+> python -m pip install --upgrade "pymobiledevice3>=11.0.0,<12"
+> ```
+
+**如何確認目前安裝的版本：**
+在命令提示字元輸入以下指令：
+```cmd
+python -c "import importlib.metadata; print(importlib.metadata.version('pymobiledevice3'))"
+```
+若輸出開頭為 `11.`（例如 `11.1.3`），即代表升級成功！
 
 ---
 
@@ -339,17 +365,24 @@ iOS 17 以上建立通道需要系統管理員權限。請確認：
 </details>
 
 <details>
-<summary>❓ 問題四：終端機顯示「No module named pymobiledevice3」</summary>
+<summary>❓ 問題四：終端機顯示「No module named pymobiledevice3」或版本錯誤（ImportError / AttributeError）</summary>
 
-表示套件沒安裝成功，或裝在不同的 Python 環境。
+表示套件沒安裝成功，或安裝了舊版本（10.x.x）與現在的程式碼不相容。
 
+**安裝或升級至 11.x.x 版本指令：**
+```cmd
+pip install --upgrade "pymobiledevice3>=11.0.0,<12"
 ```
-pip install pymobiledevice3
+若 `pip` 找不到命令，改用：
+```cmd
+python -m pip install --upgrade "pymobiledevice3>=11.0.0,<12"
 ```
-若 `pip` 找不到，改用：
+
+**確認安裝版本：**
+```cmd
+python -c "import importlib.metadata; print(importlib.metadata.version('pymobiledevice3'))"
 ```
-python -m pip install pymobiledevice3
-```
+確認輸出為 `11.x.x` 即可。
 
 </details>
 
@@ -361,7 +394,7 @@ python -m pip install pymobiledevice3
 **最新版本已自動處理這個問題！** 重新執行啟動指令時，程式會自動偵測並關閉上一個舊程序。
 
 如果自動處理失敗，可手動關掉佔用 8765 埠的程式：
-```
+```cmd
 for /f "tokens=5" %a in ('netstat -ano ^| findstr :8765') do taskkill /PID %a /F
 ```
 執行後等一秒，再重新啟動視窗 2 的指令。
@@ -394,8 +427,8 @@ for /f "tokens=5" %a in ('netstat -ano ^| findstr :8765') do taskkill /PID %a /F
 2. 前往 [python.org/downloads/release/python-3128](https://www.python.org/downloads/release/python-3128/)，往下捲到 **Files**，下載 **Windows installer (64-bit)**
 3. 雙擊安裝，**最下面的「Add Python to PATH」一定要打勾**，再按 **Install Now**
 4. **關掉所有舊的命令提示字元視窗**，重新開一個，重新執行步驟 C：
-   ```
-   python -m pip install pymobiledevice3
+   ```cmd
+   python -m pip install "pymobiledevice3>=11.0.0,<12"
    ```
 5. 這次套件會直接下載現成安裝檔（檔名含 `cp312`），不再編譯，最後看到 `Successfully installed ...` 就成功了
 
@@ -430,6 +463,7 @@ for /f "tokens=5" %a in ('netstat -ano ^| findstr :8765') do taskkill /PID %a /F
 ```
 pikmin-spoof/           （下載解壓縮後的資料夾名稱，從這裡執行工具）
 ├── gps_spoof.py        主程式（Python 伺服器 + 地圖控制介面，跨平台）
+├── requirements.txt    Python 套件相依性清單（鎖定 pymobiledevice3 v11）
 ├── favorites.json      你儲存的收藏地點（自動產生，請別手動刪除）
 ├── last_position.json  上次的 GPS 位置（自動產生）
 ├── README.md           Mac 版說明
@@ -461,7 +495,13 @@ This tool lets you fake your iPhone's GPS location from a Windows PC — no jail
 **Software (free, one-time install):**
 1. **Python 3.10+** from [python.org/downloads](https://www.python.org/downloads/) — during install, **check "Add Python to PATH"**
 2. **Apple device driver** — install desktop **iTunes** from [apple.com/itunes/download](https://www.apple.com/itunes/download/) (Windows can't talk to an iPhone without it)
-3. **pymobiledevice3** — open Command Prompt and run: `pip install pymobiledevice3`
+3. **pymobiledevice3 (v11 required)** — open Command Prompt and run: `pip install "pymobiledevice3>=11.0.0,<12"` or `pip install -r requirements.txt`
+
+### Upgrading from pymobiledevice3 10.x.x
+If you previously used an older version of this tool, upgrade to v11:
+```cmd
+pip install --upgrade "pymobiledevice3>=11.0.0,<12"
+```
 
 ### One-Time Setup
 
@@ -498,7 +538,7 @@ Includes a continuous stochastic physics model to prevent anti-cheat detection a
 | Tunnel fails / permission error | Make sure Window 1 is **Run as Administrator**; install **WinTun** if prompted |
 | iPhone not detected / iTunes can't see it | Install desktop iTunes (Apple device driver); use a data cable; try another USB port |
 | `'python' is not recognized` | Reinstall Python with **Add Python to PATH** checked; reopen the terminal |
-| `No module named pymobiledevice3` | Run: `pip install pymobiledevice3` |
+| `No module named pymobiledevice3` / Version Error | Run: `pip install --upgrade "pymobiledevice3>=11.0.0,<12"` |
 | "Address already in use" | Script auto-handles it. Else: `for /f "tokens=5" %a in ('netstat -ano ^| findstr :8765') do taskkill /PID %a /F` |
 | Red status dot | Restart both windows; re-plug USB; re-copy RSD address/port |
 | GPS not changing on iPhone | Restart the app on iPhone; ensure the green dot shows |

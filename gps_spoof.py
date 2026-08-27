@@ -25,6 +25,46 @@ import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
+
+# ── Dependency Check ──────────────────────────────────────────────────────────
+
+def check_dependencies() -> bool:
+    """Verify pymobiledevice3 is installed and meets version requirements (v11.x.x)."""
+    try:
+        import importlib.metadata
+        ver_str = importlib.metadata.version('pymobiledevice3')
+    except Exception:
+        try:
+            import pymobiledevice3
+            ver_str = getattr(pymobiledevice3, '__version__', 'unknown')
+        except ImportError:
+            print("\n❌ Error: 'pymobiledevice3' is not installed.")
+            print("   Please install it with:")
+            if sys.platform == 'win32':
+                print('     pip install "pymobiledevice3>=11.0.0,<12"')
+            else:
+                print('     pip3 install "pymobiledevice3>=11.0.0,<12"')
+            print()
+            return False
+
+    try:
+        major = int(ver_str.split('.')[0])
+        if major < 11:
+            print(f"\n⚠️  Error: Detected outdated 'pymobiledevice3' (version {ver_str}).")
+            print("   GPS Spoof requires pymobiledevice3 version 11.x.x.")
+            print("   Please upgrade by running:")
+            if sys.platform == 'win32':
+                print('     pip install --upgrade "pymobiledevice3>=11.0.0,<12"')
+            else:
+                print('     pip3 install --upgrade "pymobiledevice3>=11.0.0,<12"')
+            print()
+            return False
+    except Exception:
+        pass
+
+    return True
+
+
 # ── Device Discovery and Selection ────────────────────────────────────────────
 
 async def get_device_info(serial: str, conn_type: str) -> dict:
@@ -1495,6 +1535,9 @@ def open_browser(url: str, delay: float = 0.5):
 # ── Entry Point ────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
+    if not check_dependencies():
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description='GPS Spoof — iOS Location Simulator')
     parser.add_argument('--rsd', nargs=2, metavar=('HOST', 'PORT'),
                         help='RSD address and port from: sudo python3 -m pymobiledevice3 remote start-tunnel')
