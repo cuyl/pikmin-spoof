@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <title>GPS Spoof</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@2.0.0-alpha.1/dist/leaflet-global.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
 body { display: flex; height: 100vh; background: #1c1c1e; color: #fff; overflow: hidden; }
@@ -577,11 +577,11 @@ function togglePhysicsPanel() {
   arrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
 }
 
-const map = L.map('map').setView([37.7749, -122.4194], 16);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+const map = new L.Map('map').setView([37.7749, -122.4194], 16);
+new L.TileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '© OpenStreetMap'
 }).addTo(map);
-const marker = L.marker([37.7749, -122.4194], { draggable: true }).addTo(map);
+const marker = new L.Marker([37.7749, -122.4194], { draggable: true }).addTo(map);
 marker.on('dragstart', () => { stopWalk(); stopJoystick(); });
 marker.on('dragend', () => {
   const pos = marker.getLatLng();
@@ -597,7 +597,7 @@ marker.on('dragend', () => {
 });
 
 // ── Map overlay ───────────────────────────────────────────
-const overlayCtrl = L.control({ position: 'bottomleft' });
+const overlayCtrl = new L.Control({ position: 'bottomleft' });
 overlayCtrl.onAdd = () => {
   const div = L.DomUtil.create('div', 'map-overlay');
   div.innerHTML =
@@ -609,7 +609,7 @@ overlayCtrl.onAdd = () => {
 };
 overlayCtrl.addTo(map);
 
-const recenterCtrl = L.control({ position: 'topleft' });
+const recenterCtrl = new L.Control({ position: 'topleft' });
 recenterCtrl.onAdd = () => {
   const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
   const a = L.DomUtil.create('a', 'leaflet-control-recenter', container);
@@ -1006,7 +1006,7 @@ function stopSpoofing() {
 
 // ── Waypoint Route ────────────────────────────────────────
 function numberedIcon(n) {
-  return L.divIcon({
+  return new L.DivIcon({
     className: '',
     html: `<div style="background:#0a84ff;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:grab;user-select:none;">${n}</div>`,
     iconSize: [26, 26], iconAnchor: [13, 13]
@@ -1016,7 +1016,7 @@ function numberedIcon(n) {
 function updateRouteLine() {
   if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
   if (waypoints.length >= 2) {
-    routeLine = L.polyline(waypoints.map(w => [w.lat, w.lon]), {
+    routeLine = new L.Polyline(waypoints.map(w => [w.lat, w.lon]), {
       color: '#0a84ff', weight: 3, opacity: 0.65, dashArray: '8, 10'
     }).addTo(map);
   }
@@ -1025,7 +1025,7 @@ function updateRouteLine() {
 function updateLeadLine() {
   if (leadLine) { map.removeLayer(leadLine); leadLine = null; }
   if (waypoints.length > 0) {
-    leadLine = L.polyline([[curLat, curLon], [waypoints[0].lat, waypoints[0].lon]], {
+    leadLine = new L.Polyline([[curLat, curLon], [waypoints[0].lat, waypoints[0].lon]], {
       color: '#0a84ff', weight: 3, opacity: 0.65, dashArray: '8, 10'
     }).addTo(map);
   }
@@ -1055,7 +1055,7 @@ function removeWaypoint(idx) {
 
 function addWaypoint(lat, lon) {
   waypoints.push({ lat, lon });
-  const m = L.marker([lat, lon], { icon: numberedIcon(waypoints.length), draggable: true }).addTo(map);
+  const m = new L.Marker([lat, lon], { icon: numberedIcon(waypoints.length), draggable: true }).addTo(map);
   const onDrag = () => {
     const idx = waypointMarkers.indexOf(m);
     if (idx === -1) return;
