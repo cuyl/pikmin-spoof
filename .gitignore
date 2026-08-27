@@ -4,4 +4,5 @@ __pycache__/
 .DS_Store
 favorites.json
 last_position.json
+last_device.json
 docs/

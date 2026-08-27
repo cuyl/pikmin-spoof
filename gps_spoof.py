@@ -144,24 +144,73 @@ async def discover_devices() -> list[dict]:
     return list(devices.values())
 
 
+# ── Last Connected Device Persistence ─────────────────────────────────────────
+
+LAST_DEVICE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'last_device.json')
+
+
+def load_last_device() -> dict | None:
+    """Load metadata of the last successfully connected / selected device."""
+    try:
+        with open(LAST_DEVICE_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, dict) and data.get('serial'):
+                return data
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, Exception):
+        pass
+    return None
+
+
+def save_last_device(device_info: dict | None):
+    """Save metadata of the last connected / selected device."""
+    if not device_info or not device_info.get('serial'):
+        return
+    try:
+        with open(LAST_DEVICE_FILE, 'w', encoding='utf-8') as f:
+            json.dump({
+                'serial': str(device_info['serial']),
+                'name': str(device_info.get('name') or 'iOS Device'),
+                'product_type': str(device_info.get('product_type') or ''),
+                'version': str(device_info.get('version') or '')
+            }, f, indent=2)
+    except Exception:
+        pass
+
+
 def select_device(devices: list[dict], target_serial: str | None = None) -> dict | None:
     """
     Select target device from discovered list.
-    - If target_serial is provided: match directly.
-    - If exactly 1 device found: connect automatically.
-    - If multiple devices found: prompt the user interactively.
-    - If 0 devices found: return None.
+    - If target_serial is provided: match directly and remember it.
+    - If last connected device is known: prioritize it as the default choice.
+    - If exactly 1 device found: connect automatically and remember it.
+    - If multiple devices found: prompt the user interactively with the last used device as default.
+    - If 0 devices found: fallback to last connected device or attempt default connection.
     """
+    last_device = load_last_device()
+
     if target_serial:
         target_serial_clean = target_serial.strip()
         for d in devices:
             if target_serial_clean.lower() in d['serial'].lower():
                 print(f"  Target device selected via CLI: {d['name']} ({d['serial']}) [{d['connection_type']}]")
+                save_last_device(d)
                 return d
         print(f"  Target device serial: {target_serial_clean}")
-        return {'serial': target_serial_clean, 'name': 'Target Device', 'connection_type': 'USB', 'product_type': '', 'version': ''}
+        chosen = {'serial': target_serial_clean, 'name': 'Target Device', 'connection_type': 'USB', 'product_type': '', 'version': ''}
+        save_last_device(chosen)
+        return chosen
 
     if len(devices) == 0:
+        if last_device:
+            print("  ⚠️  No connected iOS devices detected via USB/Network.")
+            print(f"     Will attempt connection to last used device: {last_device['name']} ({last_device['serial']})...")
+            return {
+                'serial': last_device['serial'],
+                'name': last_device.get('name', 'Target Device'),
+                'connection_type': 'USB',
+                'product_type': last_device.get('product_type', ''),
+                'version': last_device.get('version', '')
+            }
         print("  ⚠️  No connected iOS devices detected via USB/Network.")
         print("     Will attempt default connection...")
         return None
@@ -171,14 +220,24 @@ def select_device(devices: list[dict], target_serial: str | None = None) -> dict
         model_str = f", {d['product_type']}" if d['product_type'] else ""
         print(f"  📱 1 device found: {d['name']} ({d['serial']}{model_str}) [{d['connection_type']}]")
         print("     Connecting automatically...")
+        save_last_device(d)
         return d
 
-    # Multiple devices found: prompt user
+    # Multiple devices found: if a last used device is present, sort it to position 1 as default
+    last_serial = last_device['serial'].lower() if (last_device and last_device.get('serial')) else None
+    if last_serial:
+        matched_idx = next((i for i, d in enumerate(devices) if d['serial'].lower() == last_serial), None)
+        if matched_idx is not None and matched_idx != 0:
+            last_dev_obj = devices.pop(matched_idx)
+            devices.insert(0, last_dev_obj)
+
     print(f"\n  📱 Multiple devices found ({len(devices)}):")
     for i, d in enumerate(devices, 1):
         model_str = f", {d['product_type']}" if d['product_type'] else ""
         ver_str = f" iOS {d['version']}" if d['version'] else ""
-        print(f"    [{i}] {d['name']} ({d['serial']}{model_str}{ver_str}) [{d['connection_type']}]")
+        is_last = bool(last_serial and d['serial'].lower() == last_serial)
+        tag = " (last connected — default)" if is_last else ""
+        print(f"    [{i}] {d['name']} ({d['serial']}{model_str}{ver_str}) [{d['connection_type']}]{tag}")
 
     print()
     while True:
@@ -204,6 +263,7 @@ def select_device(devices: list[dict], target_serial: str | None = None) -> dict
             sys.exit(0)
 
     print(f"  Selected: {selected['name']} ({selected['serial']})\n")
+    save_last_device(selected)
     return selected
 
 
@@ -271,6 +331,8 @@ class LocationController:
                         dev_label = self.device_name or 'Phone'
                         self.status = f'{dev_label} connected successfully'
                         print(f'  Device \'{dev_label}\' connected. Ready to spoof.')
+                        if self.serial:
+                            save_last_device({'serial': self.serial, 'name': self.device_name or dev_label})
 
                         last_sent: tuple | None = None
                         while True:
