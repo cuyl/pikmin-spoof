@@ -229,19 +229,29 @@ Python 是一個讓電腦跑程式的工具，這個 GPS 工具需要它才能�
    - 打開 **Finder**，找到你下載並解壓縮的資料夾（`pikmin-spoof`）
    - 把那個資料夾**直接拖進終端機視窗**（拖到那個 `cd ` 後面的位置）
    - 路徑會自動填入，按 `Return`
-3. 現在輸入以下指令（把 `<RSD_ADDRESS>` 換成步驟 2 抄下來的 RSD Address，把 `<RSD_PORT>` 換成 RSD Port）：
-   ```
-   python3 gps_spoof.py --rsd <RSD_ADDRESS> <RSD_PORT>
-   ```
+3. 現在輸入以下指令：
+   - **一般情況（自動偵測裝置）：**
+     ```
+     python3 gps_spoof.py
+     ```
+     - 只有一台裝置時：**自動連線**，不需手動選擇。
+     - 偵測到多台裝置時：終端機會列出選單（`[1]`、`[2]`...），輸入編號按 `Return` 即可選擇。
+     - 想要直接指定裝置 UDID：`python3 gps_spoof.py --serial <UDID>`
+     - 查看目前偵測到的所有裝置：`python3 gps_spoof.py --list-devices`
 
-   **舉例（你的數字會不一樣）：**
-   ```
-   python3 gps_spoof.py --rsd fd1a:48e:cc16::1 58981
-   ```
+   - **或是手動指定通道（若有使用終端機 1 的 RSD 資訊）：**
+     ```
+     python3 gps_spoof.py --rsd <RSD_ADDRESS> <RSD_PORT>
+     ```
+
+     **舉例（你的數字會不一樣）：**
+     ```
+     python3 gps_spoof.py --rsd fd1a:48e:cc16::1 58981
+     ```
 
 4. 按 `Return`，等待看到這行文字：
    ```
-   Device connected. Ready to spoof.
+   Device '你的裝置名稱' connected. Ready to spoof.
    ```
    
    出現這行 → ✅ 成功！iPhone 已準備好接受 GPS 模擬

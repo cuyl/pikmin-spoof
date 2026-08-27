@@ -25,6 +25,147 @@ import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
+# ── Device Discovery and Selection ────────────────────────────────────────────
+
+async def get_device_info(serial: str, conn_type: str) -> dict:
+    """Fetch friendly metadata for a single device via lockdown."""
+    from pymobiledevice3.lockdown import create_using_usbmux
+
+    try:
+        ld = await asyncio.wait_for(
+            create_using_usbmux(serial=serial, connection_type=conn_type),
+            timeout=2.0
+        )
+        async with ld:
+            info = ld.short_info or ld.all_values or {}
+            return {
+                'serial': serial,
+                'connection_type': conn_type,
+                'name': info.get('DeviceName') or 'iPhone',
+                'product_type': info.get('ProductType') or '',
+                'version': info.get('ProductVersion') or ''
+            }
+    except Exception:
+        return {
+            'serial': serial,
+            'connection_type': conn_type,
+            'name': 'iOS Device',
+            'product_type': '',
+            'version': ''
+        }
+
+
+async def discover_devices() -> list[dict]:
+    """Discover all connected iOS devices across USB, Network, and macOS native pairing."""
+    from pymobiledevice3.usbmux import list_devices
+
+    devices: dict[str, dict] = {}
+
+    # 1. Query usbmux devices (both USB and Network)
+    try:
+        raw_mux = await asyncio.wait_for(list_devices(), timeout=3.0)
+        tasks = [get_device_info(d.serial, d.connection_type) for d in raw_mux]
+        mux_results = await asyncio.gather(*tasks)
+        for r in mux_results:
+            s = r['serial']
+            # Prioritize USB over Network if the device appears in both
+            if s not in devices or r['connection_type'] == 'USB':
+                devices[s] = r
+    except Exception:
+        pass
+
+    # 2. On macOS, query remotepairingd native devices as supplement
+    if sys.platform == 'darwin':
+        try:
+            from pymobiledevice3.remote.native_tunnel import browse_native_devices
+            native_devs = await asyncio.wait_for(browse_native_devices(timeout=1.5), timeout=2.5)
+            for nd in native_devs:
+                udid = nd.get('udid')
+                if not udid:
+                    continue
+                name = nd.get('name') or nd.get('UserAssignedDeviceName') or 'iPhone'
+                product = nd.get('model') or nd.get('ProductType') or ''
+                if udid not in devices:
+                    devices[udid] = {
+                        'serial': udid,
+                        'connection_type': 'Network' if nd.get('wirelessConnectivity') else 'USB',
+                        'name': name,
+                        'product_type': product,
+                        'version': ''
+                    }
+                elif devices[udid]['name'] in ('iPhone', 'iOS Device') and name not in ('iPhone', 'iOS Device'):
+                    devices[udid]['name'] = name
+                    if product:
+                        devices[udid]['product_type'] = product
+        except Exception:
+            pass
+
+    return list(devices.values())
+
+
+def select_device(devices: list[dict], target_serial: str | None = None) -> dict | None:
+    """
+    Select target device from discovered list.
+    - If target_serial is provided: match directly.
+    - If exactly 1 device found: connect automatically.
+    - If multiple devices found: prompt the user interactively.
+    - If 0 devices found: return None.
+    """
+    if target_serial:
+        target_serial_clean = target_serial.strip()
+        for d in devices:
+            if target_serial_clean.lower() in d['serial'].lower():
+                print(f"  Target device selected via CLI: {d['name']} ({d['serial']}) [{d['connection_type']}]")
+                return d
+        print(f"  Target device serial: {target_serial_clean}")
+        return {'serial': target_serial_clean, 'name': 'Target Device', 'connection_type': 'USB', 'product_type': '', 'version': ''}
+
+    if len(devices) == 0:
+        print("  ⚠️  No connected iOS devices detected via USB/Network.")
+        print("     Will attempt default connection...")
+        return None
+
+    if len(devices) == 1:
+        d = devices[0]
+        model_str = f", {d['product_type']}" if d['product_type'] else ""
+        print(f"  📱 1 device found: {d['name']} ({d['serial']}{model_str}) [{d['connection_type']}]")
+        print("     Connecting automatically...")
+        return d
+
+    # Multiple devices found: prompt user
+    print(f"\n  📱 Multiple devices found ({len(devices)}):")
+    for i, d in enumerate(devices, 1):
+        model_str = f", {d['product_type']}" if d['product_type'] else ""
+        ver_str = f" iOS {d['version']}" if d['version'] else ""
+        print(f"    [{i}] {d['name']} ({d['serial']}{model_str}{ver_str}) [{d['connection_type']}]")
+
+    print()
+    while True:
+        try:
+            choice = input(f"  Select device [1-{len(devices)}] (default: 1): ").strip()
+            if not choice:
+                selected = devices[0]
+                break
+            idx = int(choice)
+            if 1 <= idx <= len(devices):
+                selected = devices[idx - 1]
+                break
+            print(f"  Please enter a number between 1 and {len(devices)}.")
+        except ValueError:
+            # Check if user typed or pasted part of a UDID or name
+            matched = [d for d in devices if choice.lower() in d['serial'].lower() or choice.lower() in d['name'].lower()]
+            if len(matched) == 1:
+                selected = matched[0]
+                break
+            print(f"  Invalid selection '{choice}'. Please enter a number [1-{len(devices)}].")
+        except (KeyboardInterrupt, EOFError):
+            print("\nAborted.")
+            sys.exit(0)
+
+    print(f"  Selected: {selected['name']} ({selected['serial']})\n")
+    return selected
+
+
 # ── Persistent Location Controller ────────────────────────────────────────────
 
 class LocationController:
@@ -33,11 +174,13 @@ class LocationController:
     set_location() is non-blocking and always uses the latest coordinate.
     """
 
-    def __init__(self, rsd_host: str, rsd_port: int):
+    def __init__(self, rsd_host: str | None, rsd_port: int | None, serial: str | None = None, device_name: str | None = None):
         self.rsd_host = rsd_host
         self.rsd_port = rsd_port
+        self.serial = serial
+        self.device_name = device_name
         self.connected = False
-        self.status = 'Connecting to device...'
+        self.status = f'Connecting to {self.device_name}...' if self.device_name else 'Connecting to device...'
         self._latest: tuple | None = None
         self._lock = threading.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -76,15 +219,17 @@ class LocationController:
                 print(f'  Connecting to RSD at {self.rsd_host}:{self.rsd_port}...')
                 rsd_service = RemoteServiceDiscoveryService((self.rsd_host, self.rsd_port))
             else:
-                print('  Connecting to RSD at default host/port...')
-                rsd_service = PreferredRsdTunnel(serial=None)
+                target_desc = f"{self.device_name} ({self.serial})" if self.device_name and self.serial else (self.device_name or self.serial or 'default device')
+                print(f'  Connecting to {target_desc} via RSD tunnel...')
+                rsd_service = PreferredRsdTunnel(serial=self.serial)
 
             async with rsd_service as rsd:
                 async with DvtProvider(rsd) as dvt:
                     async with LocationSimulation(dvt) as loc:
                         self.connected = True
-                        self.status = 'Phone connected successfully'
-                        print('  Device connected. Ready to spoof.')
+                        dev_label = self.device_name or 'Phone'
+                        self.status = f'{dev_label} connected successfully'
+                        print(f'  Device \'{dev_label}\' connected. Ready to spoof.')
 
                         last_sent: tuple | None = None
                         while True:
@@ -1244,6 +1389,7 @@ class Handler(BaseHTTPRequestHandler):
             data = {
                 'connected': controller.connected if controller else False,
                 'status': controller.status if controller else 'No controller',
+                'device_name': controller.device_name if controller else '',
                 'is_active': is_active
             }
         elif self.path == '/favorites/add':
@@ -1349,18 +1495,47 @@ def open_browser(url: str, delay: float = 0.5):
 # ── Entry Point ────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description='GPS Spoof — iOS Location Simulator')
     parser.add_argument('--rsd', nargs=2, metavar=('HOST', 'PORT'),
                         help='RSD address and port from: sudo python3 -m pymobiledevice3 remote start-tunnel')
+    parser.add_argument('--serial', '--udid', dest='serial', metavar='UDID',
+                        help='Target device UDID / serial')
+    parser.add_argument('--list-devices', action='store_true',
+                        help='List connected iOS devices and exit')
     parser.add_argument('--no-browser', action='store_true',
                         help='Do not automatically open default web browser on startup')
     args = parser.parse_args()
+
+    if args.list_devices:
+        print("\n  Scanning for connected iOS devices...")
+        devices = asyncio.run(discover_devices())
+        if not devices:
+            print("  No connected iOS devices found.\n")
+        else:
+            print(f"\n  Found {len(devices)} device(s):")
+            for i, d in enumerate(devices, 1):
+                model_str = f", {d['product_type']}" if d['product_type'] else ""
+                ver_str = f" iOS {d['version']}" if d['version'] else ""
+                print(f"    [{i}] {d['name']} ({d['serial']}{model_str}{ver_str}) [{d['connection_type']}]")
+            print()
+        sys.exit(0)
+
+    rsd_host, rsd_port = None, None
+    selected_serial = None
+    selected_name = None
+
     if args.rsd:
         rsd_host, rsd_port = args.rsd[0], int(args.rsd[1])
     else:
-        rsd_host, rsd_port = None, None  # Use default RSD host/port if not provided
+        print("\n  Scanning for connected iOS devices...")
+        devices = asyncio.run(discover_devices())
+        chosen = select_device(devices, target_serial=args.serial)
+        if chosen:
+            selected_serial = chosen.get('serial')
+            selected_name = chosen.get('name')
+
     load_favorites()
-    controller = LocationController(rsd_host, rsd_port)
+    controller = LocationController(rsd_host, rsd_port, serial=selected_serial, device_name=selected_name)
 
     port = 8765
     _free_port(port)
