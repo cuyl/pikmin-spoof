@@ -462,7 +462,8 @@ for /f "tokens=5" %a in ('netstat -ano ^| findstr :8765') do taskkill /PID %a /F
 
 ```
 pikmin-spoof/           （下載解壓縮後的資料夾名稱，從這裡執行工具）
-├── gps_spoof.py        主程式（Python 伺服器 + 地圖控制介面，跨平台）
+├── gps_spoof.py        主程式（Python 伺服器，跨平台）
+├── index.html          Web UI 地圖控制介面
 ├── requirements.txt    Python 套件相依性清單（鎖定 pymobiledevice3 v11）
 ├── favorites.json      你儲存的收藏地點（自動產生，請別手動刪除）
 ├── last_position.json  上次的 GPS 位置（自動產生）
