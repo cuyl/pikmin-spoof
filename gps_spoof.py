@@ -651,39 +651,43 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   </div>
 
   <div class="section">
-    <div class="section-label">Status & Physics</div>
+    <div class="section-label">Status</div>
     <div id="status-bar">
       <div id="dot" class="connecting"></div>
       <span id="status-text">Connecting to device...</span>
     </div>
-    <div id="status-coord" style="font-size:11px;color:#8e8e93;margin-top:8px;margin-bottom:12px;font-family:monospace;">📍 37.7749, -122.4194</div>
+    <div id="status-coord" style="font-size:11px;color:#8e8e93;margin-top:8px;font-family:monospace;">📍 37.7749, -122.4194</div>
 
-    <div style="font-size:11px;font-weight:600;color:#8e8e93;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">GPS Physics & Anti-Cheat</div>
-    <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-        <input type="checkbox" id="physics-ou" checked onchange="togglePhysicsOptions()">
-        <span>Ornstein-Uhlenbeck Drift (Slow Jitter)</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-        <input type="checkbox" id="physics-gait" checked onchange="togglePhysicsOptions()">
-        <span>Gait Jitter (0.15m Lateral Sway)</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-        <input type="checkbox" id="physics-gdop" checked onchange="togglePhysicsOptions()">
-        <span>Slow Altitude & GDOP Precision Drift</span>
-      </label>
-    </div>
+    <div style="margin-top:12px;">
+      <div id="physics-toggle-btn" onclick="togglePhysicsPanel()" style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:#1c1c1e; border:1px solid #3a3a3c; border-radius:6px; cursor:pointer; user-select:none; font-size:11px; color:#8e8e93; transition:background 0.15s;">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span id="physics-arrow" style="font-size:9px; transition:transform 0.2s; transform:rotate(-90deg); display:inline-block;">▼</span>
+          <span style="font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">GPS Physics & Anti-Cheat</span>
+        </div>
+        <span style="font-size:10px; color:#30d158; font-weight:600;">Active</span>
+      </div>
 
-    <div style="margin-top:8px;">
-      <label style="display:inline-flex; align-items:center; gap:6px; font-size:11px; color:#8e8e93; cursor:pointer;">
-        <input type="checkbox" id="toggle-hud" onchange="togglePhysicsHud()">
-        <span>Show Physics HUD</span>
-      </label>
-    </div>
+      <div id="physics-details" style="display:none; margin-top:8px; padding:10px; background:#1c1c1e; border:1px solid #3a3a3c; border-radius:8px;">
+        <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="physics-ou" checked onchange="togglePhysicsOptions()">
+            <span>Ornstein-Uhlenbeck Drift (Slow Jitter)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="physics-gait" checked onchange="togglePhysicsOptions()">
+            <span>Gait Jitter (0.15m Lateral Sway)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="physics-gdop" checked onchange="togglePhysicsOptions()">
+            <span>Slow Altitude & GDOP Precision Drift</span>
+          </label>
+        </div>
 
-    <div id="physics-hud" style="display:none; margin-top:8px; padding:8px 10px; background:#1c1c1e; border:1px solid #3a3a3c; border-radius:6px; font-size:11px; font-family:monospace; color:#30d158; flex-direction:column; gap:3px;">
-      <div>Drift: <span id="hud-drift">0.00m</span> / 4.0m cap</div>
-      <div>Alt: <span id="hud-alt">10.0m</span> | GDOP: <span id="hud-gdop">5.0m</span></div>
+        <div id="physics-hud" style="margin-top:10px; padding:8px 10px; background:#242426; border:1px solid #3a3a3c; border-radius:6px; font-size:11px; font-family:monospace; color:#30d158; display:flex; flex-direction:column; gap:3px;">
+          <div>Drift: <span id="hud-drift">0.00m</span> / 4.0m cap</div>
+          <div>Alt: <span id="hud-alt">10.0m</span> | GDOP: <span id="hud-gdop">5.0m</span></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -913,12 +917,13 @@ function togglePhysicsOptions() {
   gpsPhysics.useGDOP = document.getElementById('physics-gdop').checked;
 }
 
-function togglePhysicsHud() {
-  const hud = document.getElementById('physics-hud');
-  const chk = document.getElementById('toggle-hud');
-  if (hud && chk) {
-    hud.style.display = chk.checked ? 'flex' : 'none';
-  }
+function togglePhysicsPanel() {
+  const details = document.getElementById('physics-details');
+  const arrow = document.getElementById('physics-arrow');
+  if (!details || !arrow) return;
+  const isHidden = details.style.display === 'none' || details.style.display === '';
+  details.style.display = isHidden ? 'block' : 'none';
+  arrow.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
 }
 
 const map = L.map('map').setView([37.7749, -122.4194], 16);
