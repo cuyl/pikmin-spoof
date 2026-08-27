@@ -1158,6 +1158,241 @@ function updateDisplay(lat, lon) {
   if (coordEl) coordEl.textContent = '📍 ' + lat.toFixed(5) + ', ' + lon.toFixed(5);
 }
 
+// ── Coordinate Parsing (DD, DMS, DMM) ─────────────────────
+function cleanCoordStr(str) {
+  if (!str) return '';
+  return str
+    .trim()
+    .replace(/[\u201C\u201D\u2033\u201F\u0022]/g, '"')
+    .replace(/[\u2018\u2019\u2032\u0060\u0027]/g, "'")
+    .replace(/[\u00BA\u00B0]/g, '°');
+}
+
+function parseSingleCoord(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  let s = cleanCoordStr(raw);
+  if (!s) return null;
+
+  let isLat = null;
+  let isLon = null;
+  let sign = 1;
+
+  if (s.startsWith('-')) {
+    sign = -1;
+    s = s.substring(1).trim();
+  } else if (s.startsWith('+')) {
+    s = s.substring(1).trim();
+  }
+
+  // Check prefix direction e.g. "N41..." or "W 122..."
+  const prefixDir = s.match(/^([NSEW])\s*/i);
+  if (prefixDir) {
+    const dir = prefixDir[1].toUpperCase();
+    if (dir === 'N') { isLat = true; sign = 1; }
+    else if (dir === 'S') { isLat = true; sign = -1; }
+    else if (dir === 'E') { isLon = true; sign = 1; }
+    else if (dir === 'W') { isLon = true; sign = -1; }
+    s = s.substring(prefixDir[0].length).trim();
+  }
+
+  // Check suffix direction e.g. "...41.40338 N" or "...24'12\"N"
+  const suffixDir = s.match(/\s*([NSEW])$/i);
+  if (suffixDir) {
+    const dir = suffixDir[1].toUpperCase();
+    if (dir === 'N') { isLat = true; sign = 1; }
+    else if (dir === 'S') { isLat = true; sign = -1; }
+    else if (dir === 'E') { isLon = true; sign = 1; }
+    else if (dir === 'W') { isLon = true; sign = -1; }
+    s = s.substring(0, s.length - suffixDir[0].length).trim();
+  }
+
+  // Colon-separated DMS: 41:24:12.2
+  const colonDms = s.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
+  if (colonDms) {
+    const deg = parseFloat(colonDms[1]);
+    const min = parseFloat(colonDms[2]);
+    const sec = parseFloat(colonDms[3]);
+    if (!isNaN(deg) && !isNaN(min) && !isNaN(sec)) {
+      return { value: sign * (deg + min / 60.0 + sec / 3600.0), isLat, isLon };
+    }
+  }
+
+  // Colon-separated DMM: 41:24.2028
+  const colonDmm = s.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
+  if (colonDmm) {
+    const deg = parseFloat(colonDmm[1]);
+    const min = parseFloat(colonDmm[2]);
+    if (!isNaN(deg) && !isNaN(min)) {
+      return { value: sign * (deg + min / 60.0), isLat, isLon };
+    }
+  }
+
+  // 1. DMS: deg° min' sec" or deg d min m sec s
+  const dmsRegex = /^(\d+(?:\.\d+)?)\s*(?:°|deg|d|\s)\s*(\d+(?:\.\d+)?)\s*(?:'|min|m|\s)\s*(\d+(?:\.\d+)?)\s*(?:"|sec|s)?$/i;
+  let m = s.match(dmsRegex);
+  if (m) {
+    const deg = parseFloat(m[1]);
+    const min = parseFloat(m[2]);
+    const sec = parseFloat(m[3]);
+    if (!isNaN(deg) && !isNaN(min) && !isNaN(sec)) {
+      return { value: sign * (deg + min / 60.0 + sec / 3600.0), isLat, isLon };
+    }
+  }
+
+  // 2. DMM: deg° min.mmm' or deg min.mmm
+  const dmmRegex = /^(\d+(?:\.\d+)?)\s*(?:°|deg|d|\s)\s*(\d+(?:\.\d+)?)\s*(?:'|min|m)?$/i;
+  m = s.match(dmmRegex);
+  if (m) {
+    const deg = parseFloat(m[1]);
+    const min = parseFloat(m[2]);
+    if (!isNaN(deg) && !isNaN(min)) {
+      return { value: sign * (deg + min / 60.0), isLat, isLon };
+    }
+  }
+
+  // 3. DD: deg.dddd° or deg.dddd
+  const ddRegex = /^(\d+(?:\.\d+)?)\s*°?$/;
+  m = s.match(ddRegex);
+  if (m) {
+    const deg = parseFloat(m[1]);
+    if (!isNaN(deg)) {
+      return { value: sign * deg, isLat, isLon };
+    }
+  }
+
+  return null;
+}
+
+function parseCoordinatePair(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  let s = cleanCoordStr(raw);
+  if (!s) return null;
+
+  // Split by comma or slash or semicolon if present
+  if (s.includes(',') || s.includes('/') || s.includes(';')) {
+    const parts = s.split(/[,/;]/).map(p => p.trim()).filter(Boolean);
+    if (parts.length === 2) {
+      const c1 = parseSingleCoord(parts[0]);
+      const c2 = parseSingleCoord(parts[1]);
+      if (c1 !== null && c2 !== null) {
+        if (c1.isLon && c2.isLat) {
+          return { lat: c2.value, lon: c1.value };
+        } else {
+          return { lat: c1.value, lon: c2.value };
+        }
+      }
+    }
+  }
+
+  // DMS / DMM pair with direction indicators: e.g. "41°24'12.2"N 2°10'26.5"E" or "N41°24'12.2" E2°10'26.5""
+  const splitDirMatch = s.match(/(.*?([NS]))\s*[,;\s]\s*(.*?[EW])/i) ||
+                        s.match(/(.*?([EW]))\s*[,;\s]\s*(.*?[NS])/i);
+  if (splitDirMatch) {
+    const c1 = parseSingleCoord(splitDirMatch[1]);
+    const c2 = parseSingleCoord(splitDirMatch[3]);
+    if (c1 !== null && c2 !== null) {
+      if (c1.isLon && c2.isLat) {
+        return { lat: c2.value, lon: c1.value };
+      } else {
+        return { lat: c1.value, lon: c2.value };
+      }
+    }
+  }
+
+  // Prefix direction pair: e.g. "N 41 24.2028 E 2 10.4418"
+  const prefixDirMatch = s.match(/^([NS]\s*[\d\s.°'":dms]+?)\s+([EW]\s*[\d\s.°'":dms]+)$/i) ||
+                         s.match(/^([EW]\s*[\d\s.°'":dms]+?)\s+([NS]\s*[\d\s.°'":dms]+)$/i);
+  if (prefixDirMatch) {
+    const c1 = parseSingleCoord(prefixDirMatch[1]);
+    const c2 = parseSingleCoord(prefixDirMatch[2]);
+    if (c1 !== null && c2 !== null) {
+      if (c1.isLon && c2.isLat) {
+        return { lat: c2.value, lon: c1.value };
+      } else {
+        return { lat: c1.value, lon: c2.value };
+      }
+    }
+  }
+
+  // 4 numbers separated by spaces (DMM pair): e.g. "41 24.2028  2 10.4418"
+  const dmm4Regex = /^([+-]?\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+([+-]?\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/;
+  const m4 = s.match(dmm4Regex);
+  if (m4) {
+    const latDeg = parseFloat(m4[1]);
+    const latMin = parseFloat(m4[2]);
+    const lonDeg = parseFloat(m4[3]);
+    const lonMin = parseFloat(m4[4]);
+    const latSign = (m4[1].trim().startsWith('-')) ? -1 : 1;
+    const lonSign = (m4[3].trim().startsWith('-')) ? -1 : 1;
+    const lat = latSign * (Math.abs(latDeg) + latMin / 60.0);
+    const lon = lonSign * (Math.abs(lonDeg) + lonMin / 60.0);
+    return { lat, lon };
+  }
+
+  // 6 numbers separated by spaces (DMS pair without symbols): e.g. "41 24 12.2 2 10 26.5"
+  const dms6Regex = /^([+-]?\d+)\s+(\d+)\s+(\d+(?:\.\d+)?)\s+([+-]?\d+)\s+(\d+)\s+(\d+(?:\.\d+)?)$/;
+  const m6 = s.match(dms6Regex);
+  if (m6) {
+    const latDeg = parseFloat(m6[1]);
+    const latMin = parseFloat(m6[2]);
+    const latSec = parseFloat(m6[3]);
+    const lonDeg = parseFloat(m6[4]);
+    const lonMin = parseFloat(m6[5]);
+    const lonSec = parseFloat(m6[6]);
+    const latSign = (m6[1].trim().startsWith('-')) ? -1 : 1;
+    const lonSign = (m6[4].trim().startsWith('-')) ? -1 : 1;
+    const lat = latSign * (Math.abs(latDeg) + latMin / 60.0 + latSec / 3600.0);
+    const lon = lonSign * (Math.abs(lonDeg) + lonMin / 60.0 + lonSec / 3600.0);
+    return { lat, lon };
+  }
+
+  // 2 numbers separated by spaces (DD pair): e.g. "41.40338 2.17403"
+  const dd2Regex = /^([+-]?\d+(?:\.\d+)?)\s+([+-]?\d+(?:\.\d+)?)$/;
+  const m2 = s.match(dd2Regex);
+  if (m2) {
+    const lat = parseFloat(m2[1]);
+    const lon = parseFloat(m2[2]);
+    return { lat, lon };
+  }
+
+  return null;
+}
+
+function formatCoord(val) {
+  if (typeof val !== 'number' || isNaN(val)) return '';
+  return parseFloat(val.toFixed(6)).toString();
+}
+
+function handleCoordInput(el, isLat) {
+  const val = el.value.trim();
+  const pair = parseCoordinatePair(val);
+  if (pair) {
+    document.getElementById('lat').value = formatCoord(pair.lat);
+    document.getElementById('lon').value = formatCoord(pair.lon);
+    showError(false);
+  }
+}
+
+function handleCoordBlur(el, isLat) {
+  const val = el.value.trim();
+  const pair = parseCoordinatePair(val);
+  if (pair) {
+    document.getElementById('lat').value = formatCoord(pair.lat);
+    document.getElementById('lon').value = formatCoord(pair.lon);
+    showError(false);
+    return;
+  }
+  const single = parseSingleCoord(val);
+  if (single !== null) {
+    if (isLat && single.isLon && !single.isLat) {
+      document.getElementById('lon').value = formatCoord(single.value);
+    } else {
+      el.value = formatCoord(single.value);
+    }
+    showError(false);
+  }
+}
+
 function showError(show) {
   document.getElementById('error-msg').style.display = show ? 'block' : 'none';
 }
@@ -1173,10 +1408,32 @@ async function sendLocation(lat, lon, alt) {
 }
 
 async function jump() {
-  const lat = parseFloat(document.getElementById('lat').value);
-  const lon = parseFloat(document.getElementById('lon').value);
-  if (isNaN(lat)||isNaN(lon)||lat<-90||lat>90||lon<-180||lon>180) { showError(true); return; }
+  const latEl = document.getElementById('lat');
+  const lonEl = document.getElementById('lon');
+  const latRaw = latEl.value.trim();
+  const lonRaw = lonEl.value.trim();
+
+  let lat = NaN;
+  let lon = NaN;
+
+  const pair = parseCoordinatePair(latRaw) || parseCoordinatePair(lonRaw);
+  if (pair) {
+    lat = pair.lat;
+    lon = pair.lon;
+  } else {
+    const parsedLat = parseSingleCoord(latRaw);
+    const parsedLon = parseSingleCoord(lonRaw);
+    lat = parsedLat !== null ? parsedLat.value : parseFloat(latRaw);
+    lon = parsedLon !== null ? parsedLon.value : parseFloat(lonRaw);
+  }
+
+  if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    showError(true);
+    return;
+  }
   showError(false);
+  latEl.value = formatCoord(lat);
+  lonEl.value = formatCoord(lon);
   updateDisplay(lat, lon);
   await sendLocation(lat, lon);
 }
@@ -1442,8 +1699,21 @@ setInterval(() => {
   }
 }, 500);
 
-document.getElementById('lat').addEventListener('keydown', e => { if(e.key==='Enter') jump(); });
-document.getElementById('lon').addEventListener('keydown', e => { if(e.key==='Enter') jump(); });
+const latInput = document.getElementById('lat');
+const lonInput = document.getElementById('lon');
+
+latInput.addEventListener('keydown', e => { if(e.key==='Enter') jump(); });
+lonInput.addEventListener('keydown', e => { if(e.key==='Enter') jump(); });
+
+latInput.addEventListener('input', () => handleCoordInput(latInput, true));
+lonInput.addEventListener('input', () => handleCoordInput(lonInput, false));
+latInput.addEventListener('paste', () => setTimeout(() => handleCoordInput(latInput, true), 0));
+lonInput.addEventListener('paste', () => setTimeout(() => handleCoordInput(lonInput, false), 0));
+latInput.addEventListener('blur', () => handleCoordBlur(latInput, true));
+lonInput.addEventListener('blur', () => handleCoordBlur(lonInput, false));
+latInput.addEventListener('change', () => handleCoordBlur(latInput, true));
+lonInput.addEventListener('change', () => handleCoordBlur(lonInput, false));
+
 document.getElementById('fav-name').addEventListener('keydown', e => { if(e.key==='Enter') saveFavorite(); });
 
 // ── Favorites ─────────────────────────────────────────────
