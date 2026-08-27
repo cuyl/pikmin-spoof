@@ -22,6 +22,7 @@ import signal
 import sys
 import threading
 import time
+import uuid
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -391,6 +392,31 @@ def save_favorites():
         json.dump({'folders': folders}, f, indent=2)
 
 
+# ── Saved Routes ───────────────────────────────────────────────────────────────
+
+ROUTES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'routes.json')
+routes: list = []  # [{ "id": str, "name": str, "waypoints": [{"lat": float, "lon": float}], "isLoop": bool }]
+
+def load_routes():
+    global routes
+    try:
+        with open(ROUTES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            routes = data
+        elif isinstance(data, dict) and 'routes' in data and isinstance(data['routes'], list):
+            routes = data['routes']
+        else:
+            routes = []
+    except (FileNotFoundError, json.JSONDecodeError):
+        routes = []
+
+def save_routes():
+    with open(ROUTES_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'routes': routes}, f, indent=2)
+
+
+
 # ── Last Position ───────────────────────────────────────────────────────────────
 
 POSITION_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'last_position.json')
@@ -508,6 +534,13 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(data)
             return
+        if self.path == '/routes':
+            data = json.dumps({'routes': routes}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if self.path == '/position':
             lat, lon = load_position()
             data = json.dumps({'lat': lat, 'lon': lon}).encode()
@@ -522,7 +555,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(load_html())
 
     def do_POST(self):
-        global active_tab_id, active_tab_last_seen
+        global active_tab_id, active_tab_last_seen, routes
         length = int(self.headers.get('Content-Length', 0))
         body = json.loads(self.rfile.read(length)) if length else {}
         client_tab_id = body.get('tabId')
@@ -581,6 +614,55 @@ class Handler(BaseHTTPRequestHandler):
                 folders.pop(fi)
                 save_favorites()
             data = {'ok': True}
+        elif self.path == '/routes/save':
+            route_id = str(body.get('id') or uuid.uuid4().hex[:8])
+            name = str(body.get('name') or 'Saved Route').strip()
+            raw_wps = body.get('waypoints') or []
+            is_loop = bool(body.get('isLoop', False))
+
+            valid_wps = []
+            for wp in raw_wps:
+                try:
+                    wlat = float(wp['lat'])
+                    wlon = float(wp['lon'])
+                    valid_wps.append({'lat': wlat, 'lon': wlon})
+                except (KeyError, ValueError, TypeError):
+                    continue
+
+            existing = next((r for r in routes if r.get('id') == route_id), None)
+            if existing:
+                existing['name'] = name
+                existing['waypoints'] = valid_wps
+                existing['isLoop'] = is_loop
+            else:
+                routes.append({
+                    'id': route_id,
+                    'name': name,
+                    'waypoints': valid_wps,
+                    'isLoop': is_loop
+                })
+            save_routes()
+            data = {'ok': True, 'routes': routes, 'id': route_id}
+        elif self.path == '/routes/delete':
+            route_id = body.get('id')
+            idx = body.get('routeIdx')
+            if route_id:
+                routes = [r for r in routes if r.get('id') != route_id]
+                save_routes()
+            elif idx is not None and 0 <= idx < len(routes):
+                routes.pop(idx)
+                save_routes()
+            data = {'ok': True, 'routes': routes}
+        elif self.path == '/routes/rename':
+            route_id = body.get('id')
+            name = str(body.get('name') or '').strip()
+            if route_id and name:
+                for r in routes:
+                    if r.get('id') == route_id:
+                        r['name'] = name
+                        break
+                save_routes()
+            data = {'ok': True, 'routes': routes}
         else:  # /jump
             with session_lock:
                 is_allowed = (client_tab_id is None or active_tab_id is None or client_tab_id == active_tab_id)
@@ -693,6 +775,7 @@ if __name__ == '__main__':
             selected_name = chosen.get('name')
 
     load_favorites()
+    load_routes()
     controller = LocationController(rsd_host, rsd_port, serial=selected_serial, device_name=selected_name)
 
     port = 8765

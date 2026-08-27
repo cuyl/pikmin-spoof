@@ -57,9 +57,43 @@ button {
 }
 button:active { opacity: 0.7; }
 .btn-blue { background: #0a84ff; color: #fff; }
+.btn-blue:hover { background: #0071e3; }
 .btn-gray { background: #3a3a3c; color: #fff; }
+.btn-gray:hover { background: #48484a; }
+.btn-green { background: #30d158; color: #fff; }
+.btn-green:hover { background: #28b84c; }
+.btn-orange { background: #ff9f0a; color: #fff; }
+.btn-orange:hover { background: #e08c07; }
 .btn-red  { background: #ff453a; color: #fff; width: 100%; padding: 11px; font-size: 14px; }
+.btn-red:hover { background: #e0382e; }
 #error-msg { font-size: 11px; color: #ff453a; margin-top: 6px; display: none; }
+
+/* ── Route Planning Styles ── */
+.route-item {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 9px 10px; background: #242426;
+  border-radius: 8px; margin-bottom: 6px; border: 1px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+.route-item:hover { border-color: #3a3a3c; background: #28282b; }
+.route-item-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.route-item-name { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.route-item-meta { font-size: 11px; color: #8e8e93; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.route-badge { font-size: 9px; padding: 2px 5px; border-radius: 4px; font-weight: 600; }
+.route-badge-loop { background: rgba(10, 132, 255, 0.2); color: #0a84ff; }
+.route-badge-oneway { background: rgba(142, 142, 147, 0.2); color: #8e8e93; }
+.route-actions { display: flex; gap: 4px; margin-top: 2px; }
+.pulse-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: #30d158; box-shadow: 0 0 8px rgba(48, 209, 88, 0.6);
+  animation: pulseAnim 1.8s infinite;
+}
+@keyframes pulseAnim {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
 
 .speed-row { display: flex; align-items: center; gap: 10px; }
 input[type=range] { flex: 1; accent-color: #0a84ff; }
@@ -361,6 +395,92 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
     <div id="error-msg">Invalid — Lat: -90…90 · Lon: -180…180</div>
   </div>
 
+  <div class="section" id="route-section">
+    <div class="section-label">Routes & Planning</div>
+
+    <!-- Mode Entry Button (when idle) -->
+    <div id="route-idle-view">
+      <button class="btn-blue" style="width:100%; padding:10px; font-size:13px; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="enterPlanningMode()">
+        <span>📐</span>
+        <span>Enter Route Planning Mode</span>
+      </button>
+    </div>
+
+    <!-- Planning Mode Active Card -->
+    <div id="route-planning-card" style="display:none; background:#1c1c1e; border:1px solid #0a84ff; border-radius:10px; padding:12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div style="font-size:12px; font-weight:700; color:#0a84ff; display:flex; align-items:center; gap:5px;">
+          <span>📐</span>
+          <span>Planning Mode</span>
+        </div>
+        <button class="btn-gray btn-sm" style="padding:3px 8px; font-size:11px;" onclick="exitPlanningMode()">Exit</button>
+      </div>
+
+      <div style="font-size:11px; color:#8e8e93; line-height:1.4; margin-bottom:10px;">
+        Click map to drop waypoints. Drag pins to adjust, click pin to delete.
+      </div>
+
+      <div style="background:#242426; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:11px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span id="plan-wp-count" style="font-weight:700; color:#fff;">0</span> <span style="color:#8e8e93;">pts</span> · 
+          <span id="plan-distance" style="font-weight:700; color:#30d158;">0 m</span>
+        </div>
+        <div id="plan-duration" style="color:#8e8e93; font-size:10px;">~0s</div>
+      </div>
+
+      <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; cursor:pointer; font-size:12px; user-select:none;">
+        <input type="checkbox" id="plan-loop-checkbox" checked onchange="onPlanLoopToggle()">
+        <span style="font-weight:600;">🔁 Closed Loop (Return to Start)</span>
+      </label>
+
+      <!-- Save route inputs -->
+      <div style="display:flex; gap:6px; margin-bottom:10px;">
+        <input type="text" id="route-name-input" placeholder="Route name (e.g. Park Run)…" style="flex:1; padding:6px 8px; font-size:12px; background:#242426; border:1px solid #3a3a3c; border-radius:6px; color:#fff; outline:none;">
+        <button class="btn-gray btn-sm" onclick="saveCurrentRoute()" title="Save route">💾 Save</button>
+      </div>
+
+      <!-- Action buttons -->
+      <div style="display:flex; gap:6px;">
+        <button class="btn-green btn-sm" style="flex:1; padding:8px 10px; font-size:12px;" onclick="startPlannedRoute()">▶ Start Route</button>
+        <button class="btn-gray btn-sm" style="padding:8px 10px; font-size:12px;" onclick="clearPlanningRoute()">🗑 Clear</button>
+      </div>
+    </div>
+
+    <!-- Active Walking HUD Card (when route is walking) -->
+    <div id="route-active-card" style="display:none; background:#1c1c1e; border:1px solid #30d158; border-radius:10px; padding:12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div style="font-size:12px; font-weight:700; color:#30d158; display:flex; align-items:center; gap:6px;">
+          <span class="pulse-dot"></span>
+          <span id="active-walk-title">Walking Route</span>
+        </div>
+        <span id="active-loop-badge" style="font-size:10px; background:#2c2c2e; padding:2px 6px; border-radius:4px; color:#aeaeb2;">Loop 1</span>
+      </div>
+
+      <div style="font-size:12px; margin-bottom:8px; color:#fff;">
+        Target: <span id="active-leg-text" style="font-weight:700; color:#0a84ff;">WP 1 / 4</span>
+      </div>
+
+      <div style="background:#242426; border-radius:6px; padding:6px 10px; margin-bottom:10px; font-size:11px; display:flex; justify-content:space-between; align-items:center;">
+        <div>Dist: <span id="active-remain-dist" style="font-weight:600; color:#30d158;">0 m</span></div>
+        <div>Mode: <span id="active-mode-tag" style="color:#0a84ff; font-weight:600;">Closed Loop</span></div>
+      </div>
+
+      <div style="display:flex; gap:6px;">
+        <button id="active-pause-btn" class="btn-orange btn-sm" style="flex:1; padding:7px 10px; font-size:12px;" onclick="togglePauseWalk()">⏸ Pause</button>
+        <button class="btn-red btn-sm" style="flex:1; padding:7px 10px; font-size:12px;" onclick="stopWalk()">⏹ Stop</button>
+      </div>
+    </div>
+
+    <!-- Saved Routes List -->
+    <div style="margin-top:14px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <span style="font-size:10px; font-weight:600; color:#636366; text-transform:uppercase; letter-spacing:0.5px;">Saved Routes</span>
+        <span id="saved-routes-count" style="font-size:10px; color:#636366;">0 saved</span>
+      </div>
+      <div id="saved-routes-list"></div>
+    </div>
+  </div>
+
   <div class="section">
     <div class="section-label">Saved Spots</div>
     <div class="fav-save-card">
@@ -623,20 +743,32 @@ recenterCtrl.onAdd = () => {
 };
 recenterCtrl.addTo(map);
 
-function updateWaypointCount() {
-  const el = document.getElementById('wp-badge');
-  if (!el) return;
-  if (waypoints.length > 0) {
-    el.textContent = waypoints.length + ' waypoint' + (waypoints.length === 1 ? '' : 's') + ' queued';
-    el.style.display = 'block';
-  } else {
-    el.style.display = 'none';
-  }
-}
-
 let curLat = 37.7749, curLon = -122.4194, speed = 19; // km/h
 let jVec = { dx: 0, dy: 0 }, jRunning = false, jActive = false;
-let waypoints = [], walkActive = false, walkTarget = null, waypointMarkers = [], routeLine = null, leadLine = null;
+
+// ── Planning & Route Management State ──────────────────────
+let isPlanningMode = false;
+let plannedWaypoints = [];
+let plannedMarkers = [];
+let plannedRoutePolyline = null;
+let plannedClosingPolyline = null;
+let isLoopRoute = true;
+
+// ── Active Route Walking State ─────────────────────────────
+let walkActive = false;
+let walkPaused = false;
+let activeRouteWaypoints = [];
+let activeRouteMarkers = [];
+let activeRoutePolyline = null;
+let activeClosingPolyline = null;
+let leadLine = null;
+let activeRouteIndex = 0;
+let activeRouteLoopCount = 1;
+let activeRouteIsLoop = true;
+let activeRouteName = '';
+
+// ── Saved Routes ───────────────────────────────────────────
+let savedRoutes = [];
 
 // ── Background-safe timer (Web Worker ignores tab visibility throttling) ───────
 const bgTick = new Worker(URL.createObjectURL(new Blob(
@@ -1004,131 +1136,354 @@ function stopSpoofing() {
   stopWalk();
 }
 
-// ── Waypoint Route ────────────────────────────────────────
-function numberedIcon(n) {
+// ── Distance & Math Utilities ──────────────────────────────
+function getDistanceMeters(lat1, lon1, lat2, lon2) {
+  const latDeg = 111000;
+  const lonDeg = 111000 * Math.cos(((lat1 + lat2) / 2) * Math.PI / 180);
+  return Math.hypot((lat2 - lat1) * latDeg, (lon2 - lon1) * lonDeg);
+}
+
+function calculateRouteDistance(wps, loop = false) {
+  if (!wps || wps.length < 2) return 0;
+  let total = 0;
+  for (let i = 0; i < wps.length - 1; i++) {
+    total += getDistanceMeters(wps[i].lat, wps[i].lon, wps[i+1].lat, wps[i+1].lon);
+  }
+  if (loop && wps.length >= 2) {
+    total += getDistanceMeters(wps[wps.length - 1].lat, wps[wps.length - 1].lon, wps[0].lat, wps[0].lon);
+  }
+  return total;
+}
+
+function formatDistance(m) {
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${(m / 1000).toFixed(2)} km`;
+}
+
+function formatDuration(distMeters, speedKmh) {
+  if (!speedKmh || speedKmh <= 0 || distMeters <= 0) return '~0s';
+  const totalSec = distMeters / ((speedKmh * 1000) / 3600);
+  if (totalSec < 60) return `~${Math.round(totalSec)}s`;
+  const mins = Math.floor(totalSec / 60);
+  const secs = Math.round(totalSec % 60);
+  return mins >= 60 ? `~${Math.floor(mins / 60)}h ${mins % 60}m` : `~${mins}m ${secs}s`;
+}
+
+function numberedIcon(n, isActive = false) {
+  const bg = isActive ? '#30d158' : '#0a84ff';
+  const ring = isActive ? '0 0 10px rgba(48,209,88,0.8), ' : '';
   return new L.DivIcon({
     className: '',
-    html: `<div style="background:#0a84ff;color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:grab;user-select:none;">${n}</div>`,
+    html: `<div style="background:${bg};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;box-shadow:${ring}0 2px 8px rgba(0,0,0,0.5);cursor:grab;user-select:none;transition:background 0.2s,box-shadow 0.2s;">${n}</div>`,
     iconSize: [26, 26], iconAnchor: [13, 13]
   });
 }
 
-function updateRouteLine() {
-  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
-  if (waypoints.length >= 2) {
-    routeLine = new L.Polyline(waypoints.map(w => [w.lat, w.lon]), {
-      color: '#0a84ff', weight: 3, opacity: 0.65, dashArray: '8, 10'
+function updateOverlayText() {
+  const overlayDiv = document.querySelector('.map-overlay');
+  if (!overlayDiv) return;
+  if (isPlanningMode) {
+    overlayDiv.innerHTML =
+      '<div class="wp-badge" id="wp-badge" style="display:block;color:#0a84ff;">📐 Planning Mode Active</div>' +
+      '<div>Click map — add waypoint</div>' +
+      '<div>Drag pin — move location</div>' +
+      '<div>Click pin — delete</div>';
+  } else if (walkActive) {
+    const loopStr = activeRouteIsLoop ? `(Loop ${activeRouteLoopCount})` : '(One-Way)';
+    overlayDiv.innerHTML =
+      `<div class="wp-badge" id="wp-badge" style="display:block;color:#30d158;">🚶 Walking Route ${loopStr}</div>` +
+      `<div>Heading to WP ${activeRouteIndex + 1} of ${activeRouteWaypoints.length}</div>` +
+      '<div>Use panel to pause or stop</div>';
+  } else {
+    overlayDiv.innerHTML =
+      '<div class="wp-badge" id="wp-badge" style="display:none;"></div>' +
+      '<div>Click map — set coordinate</div>' +
+      '<div>Drag marker — teleport</div>' +
+      '<div>Use joystick or routes to move</div>';
+  }
+}
+
+// ── Planning Mode Logic ────────────────────────────────────
+function enterPlanningMode(initialWaypoints = null, loop = true) {
+  if (walkActive) {
+    stopWalk();
+  }
+  isPlanningMode = true;
+  clearPlanningRoute();
+
+  if (initialWaypoints && Array.isArray(initialWaypoints) && initialWaypoints.length > 0) {
+    isLoopRoute = loop;
+    initialWaypoints.forEach(w => addPlannedWaypoint(w.lat, w.lon));
+  } else {
+    isLoopRoute = true;
+  }
+
+  const loopChk = document.getElementById('plan-loop-checkbox');
+  if (loopChk) loopChk.checked = isLoopRoute;
+
+  document.getElementById('route-idle-view').style.display = 'none';
+  document.getElementById('route-planning-card').style.display = 'block';
+  document.getElementById('route-active-card').style.display = 'none';
+
+  updateOverlayText();
+  updatePlanningSummary();
+}
+
+function exitPlanningMode() {
+  isPlanningMode = false;
+  clearPlanningRoute();
+
+  document.getElementById('route-idle-view').style.display = 'block';
+  document.getElementById('route-planning-card').style.display = 'none';
+  document.getElementById('route-active-card').style.display = 'none';
+
+  updateOverlayText();
+}
+
+function onPlanLoopToggle() {
+  const loopChk = document.getElementById('plan-loop-checkbox');
+  isLoopRoute = loopChk ? loopChk.checked : true;
+  updatePlannedPolylines();
+  updatePlanningSummary();
+}
+
+function updatePlanningSummary() {
+  const countEl = document.getElementById('plan-wp-count');
+  const distEl = document.getElementById('plan-distance');
+  const durEl = document.getElementById('plan-duration');
+  if (!countEl || !distEl || !durEl) return;
+
+  countEl.textContent = plannedWaypoints.length;
+  const dist = calculateRouteDistance(plannedWaypoints, isLoopRoute);
+  distEl.textContent = formatDistance(dist);
+  durEl.textContent = formatDuration(dist, speed);
+}
+
+function updatePlannedPolylines() {
+  if (plannedRoutePolyline) { map.removeLayer(plannedRoutePolyline); plannedRoutePolyline = null; }
+  if (plannedClosingPolyline) { map.removeLayer(plannedClosingPolyline); plannedClosingPolyline = null; }
+
+  if (plannedWaypoints.length >= 2) {
+    plannedRoutePolyline = new L.Polyline(plannedWaypoints.map(w => [w.lat, w.lon]), {
+      color: '#0a84ff', weight: 3.5, opacity: 0.85
+    }).addTo(map);
+
+    if (isLoopRoute) {
+      const pLast = plannedWaypoints[plannedWaypoints.length - 1];
+      const pFirst = plannedWaypoints[0];
+      plannedClosingPolyline = new L.Polyline([[pLast.lat, pLast.lon], [pFirst.lat, pFirst.lon]], {
+        color: '#5e5ce6', weight: 3, opacity: 0.75, dashArray: '6, 8'
+      }).addTo(map);
+    }
+  }
+}
+
+function addPlannedWaypoint(lat, lon) {
+  plannedWaypoints.push({ lat, lon });
+  const m = new L.Marker([lat, lon], { icon: numberedIcon(plannedWaypoints.length), draggable: true }).addTo(map);
+
+  const onDrag = () => {
+    const i = plannedMarkers.indexOf(m);
+    if (i === -1) return;
+    const pos = m.getLatLng();
+    const lng = ((pos.lng % 360) + 540) % 360 - 180;
+    plannedWaypoints[i] = { lat: pos.lat, lon: lng };
+    updatePlannedPolylines();
+    updatePlanningSummary();
+  };
+
+  m.on('drag', onDrag);
+  m.on('dragend', () => {
+    const i = plannedMarkers.indexOf(m);
+    if (i === -1) return;
+    const pos = m.getLatLng();
+    const lng = ((pos.lng % 360) + 540) % 360 - 180;
+    m.setLatLng([pos.lat, lng]);
+    plannedWaypoints[i] = { lat: pos.lat, lon: lng };
+    updatePlannedPolylines();
+    updatePlanningSummary();
+  });
+
+  m.on('click', e => {
+    L.DomEvent.stopPropagation(e);
+    removePlannedWaypoint(plannedMarkers.indexOf(m));
+  });
+
+  m.bindTooltip('Drag to adjust • Click to delete', { direction: 'top', offset: [0, -10] });
+  plannedMarkers.push(m);
+  updatePlannedPolylines();
+  updatePlanningSummary();
+}
+
+function removePlannedWaypoint(idx) {
+  if (idx < 0 || idx >= plannedWaypoints.length) return;
+  plannedWaypoints.splice(idx, 1);
+  map.removeLayer(plannedMarkers[idx]);
+  plannedMarkers.splice(idx, 1);
+  plannedMarkers.forEach((m, i) => m.setIcon(numberedIcon(i + 1)));
+  updatePlannedPolylines();
+  updatePlanningSummary();
+}
+
+function clearPlanningRoute() {
+  plannedMarkers.forEach(m => map.removeLayer(m));
+  plannedMarkers = [];
+  plannedWaypoints = [];
+  if (plannedRoutePolyline) { map.removeLayer(plannedRoutePolyline); plannedRoutePolyline = null; }
+  if (plannedClosingPolyline) { map.removeLayer(plannedClosingPolyline); plannedClosingPolyline = null; }
+  updatePlanningSummary();
+}
+
+// ── Active Route Execution & Movement Engine ──────────────
+function startPlannedRoute() {
+  if (plannedWaypoints.length < 2) {
+    alert('Please add at least 2 waypoints on the map before starting a route.');
+    return;
+  }
+  const wps = JSON.parse(JSON.stringify(plannedWaypoints));
+  const loop = isLoopRoute;
+  const name = document.getElementById('route-name-input').value.trim() || 'Custom Route';
+  exitPlanningMode();
+  startRouteExecution(wps, loop, name);
+}
+
+function startRouteExecution(wps, loop, name = 'Custom Route') {
+  stopWalk();
+
+  activeRouteWaypoints = JSON.parse(JSON.stringify(wps));
+  activeRouteIsLoop = Boolean(loop);
+  activeRouteName = name;
+  activeRouteIndex = 0;
+  activeRouteLoopCount = 1;
+  walkPaused = false;
+  walkActive = true;
+
+  // Render active markers
+  activeRouteMarkers = activeRouteWaypoints.map((w, i) => {
+    return new L.Marker([w.lat, w.lon], { icon: numberedIcon(i + 1, i === 0), interactive: false }).addTo(map);
+  });
+
+  // Render active path
+  activeRoutePolyline = new L.Polyline(activeRouteWaypoints.map(w => [w.lat, w.lon]), {
+    color: '#0a84ff', weight: 4, opacity: 0.8
+  }).addTo(map);
+
+  if (activeRouteIsLoop && activeRouteWaypoints.length >= 2) {
+    const pLast = activeRouteWaypoints[activeRouteWaypoints.length - 1];
+    const pFirst = activeRouteWaypoints[0];
+    activeClosingPolyline = new L.Polyline([[pLast.lat, pLast.lon], [pFirst.lat, pFirst.lon]], {
+      color: '#5e5ce6', weight: 3, opacity: 0.75, dashArray: '6, 8'
     }).addTo(map);
   }
+
+  // Update UI Cards
+  document.getElementById('route-idle-view').style.display = 'none';
+  document.getElementById('route-planning-card').style.display = 'none';
+  document.getElementById('route-active-card').style.display = 'block';
+
+  document.getElementById('active-walk-title').textContent = activeRouteName;
+  document.getElementById('active-loop-badge').textContent = activeRouteIsLoop ? 'Loop 1' : 'One-Way';
+  document.getElementById('active-mode-tag').textContent = activeRouteIsLoop ? 'Closed Loop' : 'One-Way';
+  document.getElementById('active-leg-text').textContent = `WP 1 / ${activeRouteWaypoints.length}`;
+
+  const pauseBtn = document.getElementById('active-pause-btn');
+  if (pauseBtn) { pauseBtn.textContent = '⏸ Pause'; pauseBtn.className = 'btn-orange btn-sm'; }
+
+  updateLeadLine();
+  updateOverlayText();
 }
 
 function updateLeadLine() {
   if (leadLine) { map.removeLayer(leadLine); leadLine = null; }
-  if (waypoints.length > 0) {
-    leadLine = new L.Polyline([[curLat, curLon], [waypoints[0].lat, waypoints[0].lon]], {
-      color: '#0a84ff', weight: 3, opacity: 0.65, dashArray: '8, 10'
+  if (walkActive && activeRouteWaypoints.length > 0 && activeRouteIndex < activeRouteWaypoints.length) {
+    const target = activeRouteWaypoints[activeRouteIndex];
+    leadLine = new L.Polyline([[curLat, curLon], [target.lat, target.lon]], {
+      color: '#30d158', weight: 3, opacity: 0.85, dashArray: '4, 6'
     }).addTo(map);
   }
 }
 
-function renumberMarkers() {
-  waypointMarkers.forEach((m, i) => m.setIcon(numberedIcon(i + 1)));
-}
-
-function removeWaypoint(idx) {
-  if (idx < 0 || idx >= waypoints.length) return;
-  waypoints.splice(idx, 1);
-  map.removeLayer(waypointMarkers[idx]);
-  waypointMarkers.splice(idx, 1);
-  renumberMarkers();
-  updateRouteLine();
-  updateLeadLine();
-  updateWaypointCount();
-  if (waypoints.length === 0) {
-    walkActive = false; walkTarget = null;
-  } else if (idx === 0) {
-    walkActive = false;
-    walkTarget = waypoints[0];
-    walkActive = true;
-  }
-}
-
-function addWaypoint(lat, lon) {
-  waypoints.push({ lat, lon });
-  const m = new L.Marker([lat, lon], { icon: numberedIcon(waypoints.length), draggable: true }).addTo(map);
-  const onDrag = () => {
-    const idx = waypointMarkers.indexOf(m);
-    if (idx === -1) return;
-    const pos = m.getLatLng();
-    const lng = ((pos.lng % 360) + 540) % 360 - 180;
-    waypoints[idx] = { lat: pos.lat, lon: lng };
-    if (idx === 0) {
-      walkTarget = waypoints[0];
+function togglePauseWalk() {
+  if (!walkActive) return;
+  walkPaused = !walkPaused;
+  const btn = document.getElementById('active-pause-btn');
+  if (btn) {
+    if (walkPaused) {
+      btn.textContent = '▶ Resume';
+      btn.className = 'btn-green btn-sm';
+    } else {
+      btn.textContent = '⏸ Pause';
+      btn.className = 'btn-orange btn-sm';
     }
-    updateRouteLine();
-    updateLeadLine();
-  };
-  m.on('drag', onDrag);
-  m.on('dragend', () => {
-    const idx = waypointMarkers.indexOf(m);
-    if (idx === -1) return;
-    const pos = m.getLatLng();
-    const lng = ((pos.lng % 360) + 540) % 360 - 180;
-    m.setLatLng([pos.lat, lng]);
-    waypoints[idx] = { lat: pos.lat, lon: lng };
-    if (idx === 0) {
-      walkTarget = waypoints[0];
-    }
-    updateRouteLine();
-    updateLeadLine();
-  });
-  m.on('click', e => { L.DomEvent.stopPropagation(e); removeWaypoint(waypointMarkers.indexOf(m)); });
-  m.bindTooltip('Drag to edit • Click to remove', { direction: 'top', offset: [0, -10] });
-  waypointMarkers.push(m);
-  updateRouteLine();
-  updateLeadLine();
-  updateWaypointCount();
-  if (!walkActive) {
-    walkTarget = waypoints[0];
-    walkActive = true;
   }
 }
 
 function stopWalk() {
-  walkActive = false; walkTarget = null;
-  waypointMarkers.forEach(m => map.removeLayer(m));
-  waypointMarkers = []; waypoints = [];
-  if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  walkActive = false;
+  walkPaused = false;
+
+  activeRouteMarkers.forEach(m => map.removeLayer(m));
+  activeRouteMarkers = [];
+  activeRouteWaypoints = [];
+  if (activeRoutePolyline) { map.removeLayer(activeRoutePolyline); activeRoutePolyline = null; }
+  if (activeClosingPolyline) { map.removeLayer(activeClosingPolyline); activeClosingPolyline = null; }
   if (leadLine) { map.removeLayer(leadLine); leadLine = null; }
-  updateWaypointCount();
+
+  if (!isPlanningMode) {
+    document.getElementById('route-idle-view').style.display = 'block';
+    document.getElementById('route-planning-card').style.display = 'none';
+    document.getElementById('route-active-card').style.display = 'none';
+  }
+
+  updateOverlayText();
 }
 
 function tickWalk() {
-  if (!walkTarget) { stopWalk(); return; }
-  const mpt = (speed / 3.6) * 0.1;
+  if (!walkActive || walkPaused || activeRouteWaypoints.length === 0) return;
+
+  const target = activeRouteWaypoints[activeRouteIndex];
+  if (!target) { stopWalk(); return; }
+
+  const mpt = (speed / 3.6) * 0.1; // meters per 100ms
   const latDeg = 111000;
   const lonDeg = 111000 * Math.cos(curLat * Math.PI / 180);
-  const dLat = walkTarget.lat - curLat;
-  const dLon = walkTarget.lon - curLon;
+  const dLat = target.lat - curLat;
+  const dLon = target.lon - curLon;
   const distM = Math.hypot(dLat * latDeg, dLon * lonDeg);
+
   if (distM <= mpt) {
-    curLat = walkTarget.lat; curLon = walkTarget.lon;
+    curLat = target.lat;
+    curLon = target.lon;
     const phys = gpsPhysics.compute(curLat, curLon, 0, 0, false, 0.1);
     updateDisplay(curLat, curLon);
     sendLocation(phys.lat, phys.lon, phys.alt);
-    map.removeLayer(waypointMarkers[0]);
-    waypoints.shift(); waypointMarkers.shift();
-    renumberMarkers(); updateRouteLine(); updateWaypointCount();
-    walkActive = false;
-    if (waypoints.length > 0) {
-      walkTarget = waypoints[0];
-      walkActive = true;
+
+    if (activeRouteIndex < activeRouteWaypoints.length - 1) {
+      activeRouteIndex++;
     } else {
-      walkTarget = null;
+      // Reached the final point
+      if (activeRouteIsLoop) {
+        activeRouteLoopCount++;
+        activeRouteIndex = 0; // Next target is the start point. Move smoothly at set speed without jumping!
+        const badge = document.getElementById('active-loop-badge');
+        if (badge) badge.textContent = `Loop ${activeRouteLoopCount}`;
+      } else {
+        // One-way finished
+        stopWalk();
+        return;
+      }
     }
+
+    // Highlight target marker
+    activeRouteMarkers.forEach((m, i) => m.setIcon(numberedIcon(i + 1, i === activeRouteIndex)));
+    const legEl = document.getElementById('active-leg-text');
+    if (legEl) legEl.textContent = `WP ${activeRouteIndex + 1} / ${activeRouteWaypoints.length}`;
+
     updateLeadLine();
+    updateOverlayText();
     return;
   }
+
   const ratio = mpt / distM;
   curLat = curLat + dLat * ratio;
   curLon = curLon + dLon * ratio;
@@ -1136,6 +1491,124 @@ function tickWalk() {
   updateDisplay(curLat, curLon);
   sendLocation(phys.lat, phys.lon, phys.alt);
   updateLeadLine();
+
+  const remainDistEl = document.getElementById('active-remain-dist');
+  if (remainDistEl) remainDistEl.textContent = formatDistance(distM);
+}
+
+// ── Saved Routes Operations & API ──────────────────────────
+async function loadSavedRoutes() {
+  try {
+    const res = await fetch('/routes');
+    const d = await res.json();
+    savedRoutes = d.routes || [];
+    renderSavedRoutes();
+  } catch(e) {}
+}
+
+function renderSavedRoutes() {
+  const listEl = document.getElementById('saved-routes-list');
+  const countEl = document.getElementById('saved-routes-count');
+  if (!listEl) return;
+
+  if (countEl) countEl.textContent = `${savedRoutes.length} saved`;
+
+  if (savedRoutes.length === 0) {
+    listEl.innerHTML = '<div style="font-size:11px; color:#636366; font-style:italic; padding:6px 0;">No saved routes yet. Enter planning mode to create one.</div>';
+    return;
+  }
+
+  listEl.innerHTML = savedRoutes.map((r, i) => {
+    const dist = calculateRouteDistance(r.waypoints, r.isLoop);
+    const distStr = formatDistance(dist);
+    const loopBadge = r.isLoop
+      ? '<span class="route-badge route-badge-loop">🔁 Loop</span>'
+      : '<span class="route-badge route-badge-oneway">➡️ One-Way</span>';
+
+    return `
+      <div class="route-item">
+        <div class="route-item-header">
+          <span class="route-item-name" title="${escHtml(r.name)}">${escHtml(r.name)}</span>
+          ${loopBadge}
+        </div>
+        <div class="route-item-meta">
+          <span>📍 ${r.waypoints.length} pts</span>
+          <span>📏 ${distStr}</span>
+        </div>
+        <div class="route-actions">
+          <button class="btn-blue btn-sm" style="flex:1; padding:4px 8px; font-size:11px;" onclick="startSavedRoute(${i})">▶ Start</button>
+          <button class="btn-gray btn-sm" style="padding:4px 8px; font-size:11px;" onclick="editSavedRoute(${i})">📐 Edit</button>
+          <button class="btn-icon" onclick="renameSavedRoute('${r.id}', '${escHtml(r.name)}')" title="Rename">✎</button>
+          <button class="btn-icon" onclick="deleteSavedRoute('${r.id}', '${escHtml(r.name)}')" title="Delete">✕</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function saveCurrentRoute() {
+  if (plannedWaypoints.length < 2) {
+    alert('Please add at least 2 waypoints on the map before saving.');
+    return;
+  }
+  const nameInput = document.getElementById('route-name-input');
+  const name = (nameInput.value || '').trim() || (`Route ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`);
+
+  try {
+    await fetch('/routes/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        name,
+        waypoints: plannedWaypoints,
+        isLoop: isLoopRoute
+      })
+    });
+    nameInput.value = '';
+    await loadSavedRoutes();
+  } catch(e) {
+    alert('Failed to save route: ' + e);
+  }
+}
+
+function startSavedRoute(idx) {
+  const r = savedRoutes[idx];
+  if (!r || !r.waypoints || r.waypoints.length < 2) return;
+  if (isPlanningMode) exitPlanningMode();
+  startRouteExecution(r.waypoints, r.isLoop, r.name);
+}
+
+function editSavedRoute(idx) {
+  const r = savedRoutes[idx];
+  if (!r) return;
+  enterPlanningMode(r.waypoints, r.isLoop);
+  const nameInput = document.getElementById('route-name-input');
+  if (nameInput) nameInput.value = r.name;
+}
+
+async function deleteSavedRoute(id, name) {
+  if (!confirm(`Delete route "${name}"?`)) return;
+  try {
+    await fetch('/routes/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id })
+    });
+    await loadSavedRoutes();
+  } catch(e) {}
+}
+
+async function renameSavedRoute(id, currentName) {
+  const newName = prompt('Enter new route name:', currentName);
+  if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
+  try {
+    await fetch('/routes/rename', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id, name: newName.trim() })
+    });
+    await loadSavedRoutes();
+  } catch(e) {}
 }
 
 map.on('click', e => {
@@ -1143,7 +1616,10 @@ map.on('click', e => {
   const lng = ((e.latlng.lng % 360) + 540) % 360 - 180;
   document.getElementById('lat').value = lat.toFixed(6);
   document.getElementById('lon').value = lng.toFixed(6);
-  addWaypoint(lat, lng);
+
+  if (isPlanningMode) {
+    addPlannedWaypoint(lat, lng);
+  }
 });
 
 // ── Joystick ──────────────────────────────────────────────
@@ -1438,6 +1914,7 @@ async function goToFavorite(fi, si) {
 }
 
 loadFavorites();
+loadSavedRoutes();
 
 async function loadInitPosition() {
   try {

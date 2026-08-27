@@ -5,4 +5,6 @@ __pycache__/
 favorites.json
 last_position.json
 last_device.json
+routes.json
+data/
 docs/
