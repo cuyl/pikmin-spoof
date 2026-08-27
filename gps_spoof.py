@@ -5,7 +5,7 @@ Uses pymobiledevice3 Python API directly for fast joystick updates.
 
 When --rsd <HOST> <PORT> is provided, the script connects via
 RemoteServiceDiscoveryService. Otherwise it falls back to
-UserspaceRsdTunnel for the default local RSD flow.
+PreferredRsdTunnel for the default local RSD flow.
 
 Terminal 1 (optional): sudo python3 -m pymobiledevice3 remote start-tunnel
 Terminal 2: python3 gps_spoof.py --rsd <HOST> <PORT>
@@ -64,9 +64,9 @@ class LocationController:
 
     async def _async_main(self):
         from pymobiledevice3.remote.remote_service_discovery import RemoteServiceDiscoveryService
+        from pymobiledevice3.remote.rsd_tunnel import PreferredRsdTunnel
         from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
-        from pymobiledevice3.remote.userspace_tunnel import UserspaceRsdTunnel
 
         self._loop = asyncio.get_running_loop()
         self._event = asyncio.Event()
@@ -77,7 +77,7 @@ class LocationController:
                 rsd_service = RemoteServiceDiscoveryService((self.rsd_host, self.rsd_port))
             else:
                 print('  Connecting to RSD at default host/port...')
-                rsd_service = UserspaceRsdTunnel(serial=None, autopair=True)
+                rsd_service = PreferredRsdTunnel(serial=None)
 
             async with rsd_service as rsd:
                 async with DvtProvider(rsd) as dvt:
