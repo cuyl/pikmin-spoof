@@ -427,7 +427,84 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
 .speed-preset { cursor: pointer; transition: color 0.15s; }
 .speed-preset:hover { color: #0a84ff; text-decoration: underline; }
 
-#joystick-wrap { display: flex; justify-content: center; padding-top: 4px; }
+/* ── Floating Joystick ── */
+#floating-joystick-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
+}
+#floating-joystick-card {
+  pointer-events: auto;
+  background: rgba(28, 28, 30, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 12px 14px 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  user-select: none;
+}
+.floating-joy-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.floating-joy-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #aeaeb2;
+  letter-spacing: 0.3px;
+}
+.floating-joy-close {
+  background: transparent;
+  color: #8e8e93;
+  border: none;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+.floating-joy-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+#floating-joy-toggle-btn {
+  pointer-events: auto;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: rgba(28, 28, 30, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 8px 14px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  transition: transform 0.15s, background 0.15s;
+}
+#floating-joy-toggle-btn:hover {
+  background: rgba(44, 44, 46, 0.95);
+  transform: translateY(-1px);
+}
+
+#joystick-wrap { display: flex; justify-content: center; padding-top: 2px; }
 #joystick {
   position: relative; width: 110px; height: 110px;
   border-radius: 50%; background: #1c1c1e;
@@ -574,12 +651,40 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   </div>
 
   <div class="section">
-    <div class="section-label">Status</div>
+    <div class="section-label">Status & Physics</div>
     <div id="status-bar">
       <div id="dot" class="connecting"></div>
       <span id="status-text">Connecting to device...</span>
     </div>
-    <div id="status-coord" style="font-size:11px;color:#8e8e93;margin-top:14px;font-family:monospace;">📍 37.7749, -122.4194</div>
+    <div id="status-coord" style="font-size:11px;color:#8e8e93;margin-top:8px;margin-bottom:12px;font-family:monospace;">📍 37.7749, -122.4194</div>
+
+    <div style="font-size:11px;font-weight:600;color:#8e8e93;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">GPS Physics & Anti-Cheat</div>
+    <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="physics-ou" checked onchange="togglePhysicsOptions()">
+        <span>Ornstein-Uhlenbeck Drift (Slow Jitter)</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="physics-gait" checked onchange="togglePhysicsOptions()">
+        <span>Gait Jitter (0.15m Lateral Sway)</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="physics-gdop" checked onchange="togglePhysicsOptions()">
+        <span>Slow Altitude & GDOP Precision Drift</span>
+      </label>
+    </div>
+
+    <div style="margin-top:8px;">
+      <label style="display:inline-flex; align-items:center; gap:6px; font-size:11px; color:#8e8e93; cursor:pointer;">
+        <input type="checkbox" id="toggle-hud" onchange="togglePhysicsHud()">
+        <span>Show Physics HUD</span>
+      </label>
+    </div>
+
+    <div id="physics-hud" style="display:none; margin-top:8px; padding:8px 10px; background:#1c1c1e; border:1px solid #3a3a3c; border-radius:6px; font-size:11px; font-family:monospace; color:#30d158; flex-direction:column; gap:3px;">
+      <div>Drift: <span id="hud-drift">0.00m</span> / 4.0m cap</div>
+      <div>Alt: <span id="hud-alt">10.0m</span> | GDOP: <span id="hud-gdop">5.0m</span></div>
+    </div>
   </div>
 
   <div class="section">
@@ -646,7 +751,22 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   </div>
 
   <div class="section">
-    <div class="section-label">Joystick</div>
+    <button class="btn-red" onclick="stopSpoofing()">⏹ Stop Spoofing</button>
+    <div style="font-size:11px;color:#636366;margin-top:8px;text-align:center;">
+      Disconnect USB cable to fully restore real GPS
+    </div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<!-- Floating Joystick (Right-Bottom) -->
+<div id="floating-joystick-container">
+  <div id="floating-joystick-card">
+    <div class="floating-joy-header">
+      <span class="floating-joy-title">🕹️ Joystick</span>
+      <button class="floating-joy-close" onclick="toggleJoystick(false)" title="Hide Joystick">✕</button>
+    </div>
     <div id="joystick-wrap">
       <div>
         <div id="joystick">
@@ -660,38 +780,11 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
       </div>
     </div>
   </div>
-
-  <div class="section">
-    <div class="section-label">GPS Physics & Anti-Cheat Engine</div>
-    <div style="display:flex; flex-direction:column; gap:8px; font-size:12px;">
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-        <input type="checkbox" id="physics-ou" checked onchange="togglePhysicsOptions()">
-        <span>Ornstein-Uhlenbeck Drift (Slow Jitter)</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-        <input type="checkbox" id="physics-gait" checked onchange="togglePhysicsOptions()">
-        <span>Gait Jitter (0.15m Lateral Sway)</span>
-      </label>
-      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-        <input type="checkbox" id="physics-gdop" checked onchange="togglePhysicsOptions()">
-        <span>Slow Altitude & GDOP Precision Drift</span>
-      </label>
-    </div>
-    <div id="physics-hud" style="margin-top:10px; padding:8px 10px; background:#1c1c1e; border:1px solid #3a3a3c; border-radius:6px; font-size:11px; font-family:monospace; color:#30d158; display:flex; flex-direction:column; gap:3px;">
-      <div>Drift: <span id="hud-drift">0.00m</span> / 4.0m cap</div>
-      <div>Alt: <span id="hud-alt">10.0m</span> | GDOP: <span id="hud-gdop">5.0m</span></div>
-    </div>
-  </div>
-
-  <div class="section">
-    <button class="btn-red" onclick="stopSpoofing()">⏹ Stop Spoofing</button>
-    <div style="font-size:11px;color:#636366;margin-top:8px;text-align:center;">
-      Disconnect USB cable to fully restore real GPS
-    </div>
-  </div>
+  <button id="floating-joy-toggle-btn" onclick="toggleJoystick(true)" title="Show Joystick">
+    <span style="font-size:14px;">🕹️</span>
+    <span>Joystick</span>
+  </button>
 </div>
-
-<div id="map"></div>
 
 <div id="duplicate-tab-overlay" style="display:none; position:fixed; inset:0; background:rgba(28,28,30,0.92); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); z-index:99999; color:white; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px;">
   <div style="font-size:48px; margin-bottom:16px;">⚠️</div>
@@ -818,6 +911,14 @@ function togglePhysicsOptions() {
   gpsPhysics.useOU = document.getElementById('physics-ou').checked;
   gpsPhysics.useGait = document.getElementById('physics-gait').checked;
   gpsPhysics.useGDOP = document.getElementById('physics-gdop').checked;
+}
+
+function togglePhysicsHud() {
+  const hud = document.getElementById('physics-hud');
+  const chk = document.getElementById('toggle-hud');
+  if (hud && chk) {
+    hud.style.display = chk.checked ? 'flex' : 'none';
+  }
 }
 
 const map = L.map('map').setView([37.7749, -122.4194], 16);
@@ -1108,12 +1209,35 @@ map.on('click', e => {
 // ── Joystick ──────────────────────────────────────────────
 const joystick = document.getElementById('joystick');
 const knob = document.getElementById('knob');
+const joyContainer = document.getElementById('floating-joystick-container');
 const MAX_R = 35; // (joystick_width - knob_width) / 2 = (110 - 40) / 2
+
+let joystickVisible = true;
+function toggleJoystick(show) {
+  if (show === undefined) show = !joystickVisible;
+  joystickVisible = show;
+  const card = document.getElementById('floating-joystick-card');
+  const btn = document.getElementById('floating-joy-toggle-btn');
+  if (card) card.style.display = show ? 'flex' : 'none';
+  if (btn) btn.style.display = show ? 'none' : 'flex';
+  if (!show && jActive) {
+    jActive = false;
+    resetKnob();
+    stopJoystick();
+  }
+}
+
+if (joyContainer) {
+  L.DomEvent.disableClickPropagation(joyContainer);
+  L.DomEvent.disableScrollPropagation(joyContainer);
+}
 
 function moveKnob(e) {
   const r = joystick.getBoundingClientRect();
-  let dx = e.clientX - (r.left + r.width/2);
-  let dy = e.clientY - (r.top + r.height/2);
+  const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+  const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+  let dx = clientX - (r.left + r.width/2);
+  let dy = clientY - (r.top + r.height/2);
   const dist = Math.hypot(dx, dy);
   if (dist > MAX_R) { dx = dx/dist*MAX_R; dy = dy/dist*MAX_R; }
   knob.style.left = (35+dx)+'px';
@@ -1126,9 +1250,13 @@ function resetKnob() {
   jVec = { dx: 0, dy: 0 };
 }
 
-joystick.addEventListener('mousedown', e => { stopWalk(); jActive=true; moveKnob(e); startJoystick(); });
+joystick.addEventListener('mousedown', e => { e.stopPropagation(); stopWalk(); jActive=true; moveKnob(e); startJoystick(); });
 document.addEventListener('mousemove', e => { if(jActive) moveKnob(e); });
 document.addEventListener('mouseup', () => { if(!jActive) return; jActive=false; resetKnob(); stopJoystick(); });
+
+joystick.addEventListener('touchstart', e => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); stopWalk(); jActive=true; moveKnob(e.touches[0]); startJoystick(); }, {passive: false});
+document.addEventListener('touchmove', e => { if(jActive) { if (e.cancelable) e.preventDefault(); moveKnob(e.touches[0]); } }, {passive: false});
+document.addEventListener('touchend', () => { if(!jActive) return; jActive=false; resetKnob(); stopJoystick(); });
 
 function startJoystick() { jRunning = true; }
 function stopJoystick()  { jRunning = false; }
