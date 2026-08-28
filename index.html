@@ -132,7 +132,7 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
   border-radius: 16px;
   padding: 12px 14px 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-  display: flex;
+  display: none;
   flex-direction: column;
   align-items: center;
   user-select: none;
@@ -168,7 +168,7 @@ input[type=range] { flex: 1; accent-color: #0a84ff; }
 }
 #floating-joy-toggle-btn {
   pointer-events: auto;
-  display: none;
+  display: flex;
   align-items: center;
   gap: 6px;
   background: rgba(28, 28, 30, 0.9);
@@ -1628,7 +1628,7 @@ const knob = document.getElementById('knob');
 const joyContainer = document.getElementById('floating-joystick-container');
 const MAX_R = 35; // (joystick_width - knob_width) / 2 = (110 - 40) / 2
 
-let joystickVisible = true;
+let joystickVisible = false;
 function toggleJoystick(show) {
   if (show === undefined) show = !joystickVisible;
   joystickVisible = show;
