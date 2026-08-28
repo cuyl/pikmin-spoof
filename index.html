@@ -746,6 +746,11 @@ recenterCtrl.addTo(map);
 let curLat = 37.7749, curLon = -122.4194, speed = 19; // km/h
 let jVec = { dx: 0, dy: 0 }, jRunning = false, jActive = false;
 
+// ── Quick Waypoint (Live Mode) State ───────────────────────
+let quickWaypoints = [];
+let quickMarkers = [];
+let quickRouteLine = null;
+
 // ── Planning & Route Management State ──────────────────────
 let isPlanningMode = false;
 let plannedWaypoints = [];
@@ -754,7 +759,8 @@ let plannedRoutePolyline = null;
 let plannedClosingPolyline = null;
 let isLoopRoute = true;
 
-// ── Active Route Walking State ─────────────────────────────
+// ── Active Mode & Route Walking State ──────────────────────
+let walkMode = 'none'; // 'none' | 'quick' | 'route'
 let walkActive = false;
 let walkPaused = false;
 let activeRouteWaypoints = [];
@@ -1189,17 +1195,100 @@ function updateOverlayText() {
       '<div>Drag pin — move location</div>' +
       '<div>Click pin — delete</div>';
   } else if (walkActive) {
-    const loopStr = activeRouteIsLoop ? `(Loop ${activeRouteLoopCount})` : '(One-Way)';
-    overlayDiv.innerHTML =
-      `<div class="wp-badge" id="wp-badge" style="display:block;color:#30d158;">🚶 Walking Route ${loopStr}</div>` +
-      `<div>Heading to WP ${activeRouteIndex + 1} of ${activeRouteWaypoints.length}</div>` +
-      '<div>Use panel to pause or stop</div>';
+    if (walkMode === 'quick') {
+      overlayDiv.innerHTML =
+        `<div class="wp-badge" id="wp-badge" style="display:block;">${quickWaypoints.length} waypoint${quickWaypoints.length === 1 ? '' : 's'} queued</div>` +
+        '<div>Click map — add waypoint</div>' +
+        '<div>Drag numbered pin — edit</div>' +
+        '<div>Click numbered pin — remove</div>';
+    } else if (walkMode === 'route') {
+      const loopStr = activeRouteIsLoop ? `(Loop ${activeRouteLoopCount})` : '(One-Way)';
+      overlayDiv.innerHTML =
+        `<div class="wp-badge" id="wp-badge" style="display:block;color:#30d158;">🚶 Walking Route ${loopStr}</div>` +
+        `<div>Heading to WP ${activeRouteIndex + 1} of ${activeRouteWaypoints.length}</div>` +
+        '<div>Use panel to pause or stop</div>';
+    }
   } else {
     overlayDiv.innerHTML =
       '<div class="wp-badge" id="wp-badge" style="display:none;"></div>' +
-      '<div>Click map — set coordinate</div>' +
-      '<div>Drag marker — teleport</div>' +
-      '<div>Use joystick or routes to move</div>';
+      '<div>Click map — add waypoint & walk</div>' +
+      '<div>Drag numbered pin — edit</div>' +
+      '<div>Click numbered pin — remove</div>';
+  }
+}
+
+// ── Quick Waypoint (Live Mode) Logic ───────────────────────
+function updateQuickRouteLine() {
+  if (quickRouteLine) { map.removeLayer(quickRouteLine); quickRouteLine = null; }
+  if (quickWaypoints.length >= 2) {
+    quickRouteLine = new L.Polyline(quickWaypoints.map(w => [w.lat, w.lon]), {
+      color: '#0a84ff', weight: 3, opacity: 0.65, dashArray: '8, 10'
+    }).addTo(map);
+  }
+}
+
+function renumberQuickMarkers() {
+  quickMarkers.forEach((m, i) => m.setIcon(numberedIcon(i + 1)));
+}
+
+function removeQuickWaypoint(idx) {
+  if (idx < 0 || idx >= quickWaypoints.length) return;
+  quickWaypoints.splice(idx, 1);
+  map.removeLayer(quickMarkers[idx]);
+  quickMarkers.splice(idx, 1);
+  renumberQuickMarkers();
+  updateQuickRouteLine();
+  updateLeadLine();
+  updateOverlayText();
+  if (quickWaypoints.length === 0) {
+    stopWalk();
+  }
+}
+
+function addQuickWaypoint(lat, lon) {
+  if (walkMode === 'route') {
+    stopWalk();
+  }
+  walkMode = 'quick';
+  quickWaypoints.push({ lat, lon });
+  const m = new L.Marker([lat, lon], { icon: numberedIcon(quickWaypoints.length), draggable: true }).addTo(map);
+
+  const onDrag = () => {
+    const idx = quickMarkers.indexOf(m);
+    if (idx === -1) return;
+    const pos = m.getLatLng();
+    const lng = ((pos.lng % 360) + 540) % 360 - 180;
+    quickWaypoints[idx] = { lat: pos.lat, lon: lng };
+    updateQuickRouteLine();
+    updateLeadLine();
+  };
+
+  m.on('drag', onDrag);
+  m.on('dragend', () => {
+    const idx = quickMarkers.indexOf(m);
+    if (idx === -1) return;
+    const pos = m.getLatLng();
+    const lng = ((pos.lng % 360) + 540) % 360 - 180;
+    m.setLatLng([pos.lat, lng]);
+    quickWaypoints[idx] = { lat: pos.lat, lon: lng };
+    updateQuickRouteLine();
+    updateLeadLine();
+  });
+
+  m.on('click', e => {
+    L.DomEvent.stopPropagation(e);
+    removeQuickWaypoint(quickMarkers.indexOf(m));
+  });
+
+  m.bindTooltip('Drag to edit • Click to remove', { direction: 'top', offset: [0, -10] });
+  quickMarkers.push(m);
+  updateQuickRouteLine();
+  updateLeadLine();
+  updateOverlayText();
+
+  if (!walkActive) {
+    walkActive = true;
+    walkPaused = false;
   }
 }
 
@@ -1350,6 +1439,7 @@ function startPlannedRoute() {
 function startRouteExecution(wps, loop, name = 'Custom Route') {
   stopWalk();
 
+  walkMode = 'route';
   activeRouteWaypoints = JSON.parse(JSON.stringify(wps));
   activeRouteIsLoop = Boolean(loop);
   activeRouteName = name;
@@ -1395,11 +1485,17 @@ function startRouteExecution(wps, loop, name = 'Custom Route') {
 
 function updateLeadLine() {
   if (leadLine) { map.removeLayer(leadLine); leadLine = null; }
-  if (walkActive && activeRouteWaypoints.length > 0 && activeRouteIndex < activeRouteWaypoints.length) {
-    const target = activeRouteWaypoints[activeRouteIndex];
-    leadLine = new L.Polyline([[curLat, curLon], [target.lat, target.lon]], {
-      color: '#30d158', weight: 3, opacity: 0.85, dashArray: '4, 6'
-    }).addTo(map);
+  if (walkActive) {
+    if (walkMode === 'quick' && quickWaypoints.length > 0) {
+      leadLine = new L.Polyline([[curLat, curLon], [quickWaypoints[0].lat, quickWaypoints[0].lon]], {
+        color: '#0a84ff', weight: 3, opacity: 0.65, dashArray: '8, 10'
+      }).addTo(map);
+    } else if (walkMode === 'route' && activeRouteWaypoints.length > 0 && activeRouteIndex < activeRouteWaypoints.length) {
+      const target = activeRouteWaypoints[activeRouteIndex];
+      leadLine = new L.Polyline([[curLat, curLon], [target.lat, target.lon]], {
+        color: '#30d158', weight: 3, opacity: 0.85, dashArray: '4, 6'
+      }).addTo(map);
+    }
   }
 }
 
@@ -1421,7 +1517,15 @@ function togglePauseWalk() {
 function stopWalk() {
   walkActive = false;
   walkPaused = false;
+  walkMode = 'none';
 
+  // Clear quick waypoints
+  quickMarkers.forEach(m => map.removeLayer(m));
+  quickMarkers = [];
+  quickWaypoints = [];
+  if (quickRouteLine) { map.removeLayer(quickRouteLine); quickRouteLine = null; }
+
+  // Clear active route
   activeRouteMarkers.forEach(m => map.removeLayer(m));
   activeRouteMarkers = [];
   activeRouteWaypoints = [];
@@ -1439,61 +1543,113 @@ function stopWalk() {
 }
 
 function tickWalk() {
-  if (!walkActive || walkPaused || activeRouteWaypoints.length === 0) return;
+  if (!walkActive || walkPaused) return;
 
-  const target = activeRouteWaypoints[activeRouteIndex];
-  if (!target) { stopWalk(); return; }
+  if (walkMode === 'quick') {
+    if (quickWaypoints.length === 0) {
+      stopWalk();
+      return;
+    }
+    const target = quickWaypoints[0];
+    const mpt = (speed / 3.6) * 0.1;
+    const latDeg = 111000;
+    const lonDeg = 111000 * Math.cos(curLat * Math.PI / 180);
+    const dLat = target.lat - curLat;
+    const dLon = target.lon - curLon;
+    const distM = Math.hypot(dLat * latDeg, dLon * lonDeg);
 
-  const mpt = (speed / 3.6) * 0.1; // meters per 100ms
-  const latDeg = 111000;
-  const lonDeg = 111000 * Math.cos(curLat * Math.PI / 180);
-  const dLat = target.lat - curLat;
-  const dLon = target.lon - curLon;
-  const distM = Math.hypot(dLat * latDeg, dLon * lonDeg);
+    if (distM <= mpt) {
+      curLat = target.lat;
+      curLon = target.lon;
+      const phys = gpsPhysics.compute(curLat, curLon, 0, 0, false, 0.1);
+      updateDisplay(curLat, curLon);
+      sendLocation(phys.lat, phys.lon, phys.alt);
 
-  if (distM <= mpt) {
-    curLat = target.lat;
-    curLon = target.lon;
-    const phys = gpsPhysics.compute(curLat, curLon, 0, 0, false, 0.1);
-    updateDisplay(curLat, curLon);
-    sendLocation(phys.lat, phys.lon, phys.alt);
+      map.removeLayer(quickMarkers[0]);
+      quickWaypoints.shift();
+      quickMarkers.shift();
+      renumberQuickMarkers();
+      updateQuickRouteLine();
+      updateOverlayText();
 
-    if (activeRouteIndex < activeRouteWaypoints.length - 1) {
-      activeRouteIndex++;
-    } else {
-      // Reached the final point
-      if (activeRouteIsLoop) {
-        activeRouteLoopCount++;
-        activeRouteIndex = 0; // Next target is the start point. Move smoothly at set speed without jumping!
-        const badge = document.getElementById('active-loop-badge');
-        if (badge) badge.textContent = `Loop ${activeRouteLoopCount}`;
-      } else {
-        // One-way finished
+      if (quickWaypoints.length === 0) {
         stopWalk();
         return;
       }
+      updateLeadLine();
+      return;
     }
 
-    // Highlight target marker
-    activeRouteMarkers.forEach((m, i) => m.setIcon(numberedIcon(i + 1, i === activeRouteIndex)));
-    const legEl = document.getElementById('active-leg-text');
-    if (legEl) legEl.textContent = `WP ${activeRouteIndex + 1} / ${activeRouteWaypoints.length}`;
-
+    const ratio = mpt / distM;
+    curLat += dLat * ratio;
+    curLon += dLon * ratio;
+    const phys = gpsPhysics.compute(curLat, curLon, dLon, dLat, true, 0.1);
+    updateDisplay(curLat, curLon);
+    sendLocation(phys.lat, phys.lon, phys.alt);
     updateLeadLine();
-    updateOverlayText();
     return;
   }
 
-  const ratio = mpt / distM;
-  curLat = curLat + dLat * ratio;
-  curLon = curLon + dLon * ratio;
-  const phys = gpsPhysics.compute(curLat, curLon, dLon, dLat, true, 0.1);
-  updateDisplay(curLat, curLon);
-  sendLocation(phys.lat, phys.lon, phys.alt);
-  updateLeadLine();
+  if (walkMode === 'route') {
+    if (activeRouteWaypoints.length === 0) {
+      stopWalk();
+      return;
+    }
+    const target = activeRouteWaypoints[activeRouteIndex];
+    if (!target) { stopWalk(); return; }
 
-  const remainDistEl = document.getElementById('active-remain-dist');
-  if (remainDistEl) remainDistEl.textContent = formatDistance(distM);
+    const mpt = (speed / 3.6) * 0.1; // meters per 100ms
+    const latDeg = 111000;
+    const lonDeg = 111000 * Math.cos(curLat * Math.PI / 180);
+    const dLat = target.lat - curLat;
+    const dLon = target.lon - curLon;
+    const distM = Math.hypot(dLat * latDeg, dLon * lonDeg);
+
+    if (distM <= mpt) {
+      curLat = target.lat;
+      curLon = target.lon;
+      const phys = gpsPhysics.compute(curLat, curLon, 0, 0, false, 0.1);
+      updateDisplay(curLat, curLon);
+      sendLocation(phys.lat, phys.lon, phys.alt);
+
+      if (activeRouteIndex < activeRouteWaypoints.length - 1) {
+        activeRouteIndex++;
+      } else {
+        // Reached the final point
+        if (activeRouteIsLoop) {
+          activeRouteLoopCount++;
+          activeRouteIndex = 0; // Next target is the start point. Move smoothly at set speed without jumping!
+          const badge = document.getElementById('active-loop-badge');
+          if (badge) badge.textContent = `Loop ${activeRouteLoopCount}`;
+        } else {
+          // One-way finished
+          stopWalk();
+          return;
+        }
+      }
+
+      // Highlight target marker
+      activeRouteMarkers.forEach((m, i) => m.setIcon(numberedIcon(i + 1, i === activeRouteIndex)));
+      const legEl = document.getElementById('active-leg-text');
+      if (legEl) legEl.textContent = `WP ${activeRouteIndex + 1} / ${activeRouteWaypoints.length}`;
+
+      updateLeadLine();
+      updateOverlayText();
+      return;
+    }
+
+    const ratio = mpt / distM;
+    curLat += dLat * ratio;
+    curLon += dLon * ratio;
+    const phys = gpsPhysics.compute(curLat, curLon, dLon, dLat, true, 0.1);
+    updateDisplay(curLat, curLon);
+    sendLocation(phys.lat, phys.lon, phys.alt);
+    updateLeadLine();
+
+    const remainDistEl = document.getElementById('active-remain-dist');
+    if (remainDistEl) remainDistEl.textContent = formatDistance(distM);
+    return;
+  }
 }
 
 // ── Saved Routes Operations & API ──────────────────────────
@@ -1619,6 +1775,8 @@ map.on('click', e => {
 
   if (isPlanningMode) {
     addPlannedWaypoint(lat, lng);
+  } else {
+    addQuickWaypoint(lat, lng);
   }
 });
 
